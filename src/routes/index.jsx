@@ -115,11 +115,6 @@ const AppRoutes = () => {
           <Route path="users" element={<UserManagement />} />
           <Route path="attendance" element={<AttendanceReports />} />
           <Route path="courses" element={<GroupManagement />} />
-          <Route
-            path="devices"
-            element={<div>Device Management - Coming Soon</div>}
-          />
-          <Route path="settings" element={<div>Settings - Coming Soon</div>} />
         </Route>
 
         {/* Faculty Routes */}
@@ -140,7 +135,6 @@ const AppRoutes = () => {
           <Route path="students" element={<FacultyStudents />} />
           <Route path="my-groups" element={<FacultyMyGroups />} />
           <Route path="schedules" element={<FacultySchedules />} />
-          <Route path="profile" element={<div>My Profile - Coming Soon</div>} />
         </Route>
 
         {/* Student Routes */}
@@ -160,7 +154,6 @@ const AppRoutes = () => {
           <Route path="schedule" element={<MySchedules />} />
           <Route path="my-groups" element={<StudentMyGroups />} />
           <Route path="biometric" element={<BiometricStatus />} />
-          <Route path="profile" element={<div>My Profile - Coming Soon</div>} />
         </Route>
 
         {/* Default redirect based on authentication */}
