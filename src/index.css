@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles for dark mode support */
+@layer base {
+  :root {
+    @apply bg-white text-gray-900;
+  }
+
+  :root.dark {
+    @apply bg-white text-gray-900;
+  }
+
+  /* Smooth transition for theme switching */
+  * {
+    @apply transition-colors duration-200;
+  }
+
+  /* Disable transition for theme switch to prevent flash */
+  .no-transition * {
+    @apply transition-none;
+  }
+}
+
+/* Custom scrollbar styles */
+@layer utilities {
+  /* Light mode scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-gray-400;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+
+  /* Dark mode scrollbar */
+  .dark ::-webkit-scrollbar-track {
+    @apply bg-gray-800;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-gray-600;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+input {
+  @apply p-2 text-black;
+}
+
+input::placeholder {
+  @apply text-gray-400;
+}
+
+textarea {
+  @apply p-2 text-black;
+}
+
+select {
+  @apply p-2 text-black;
+}
