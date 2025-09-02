@@ -1,53 +1,19 @@
+/* eslint-disable no-undef */
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'path';
 
-// https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  // Different base paths for different deployment scenarios
-  const base = mode === 'production' ? '/static/front/' : '/';
-
-  return {
-    plugins: [react()],
-    base: base,
-    build: {
-      // Output directory for production build
-      outDir: 'dist',
-      // Generate source maps for better debugging in production
-      sourcemap: mode !== 'production',
-      // Optimize chunk sizes
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom', 'react-router-dom'],
-            mui: ['@mui/material', '@emotion/react', '@emotion/styled'],
-            utils: ['axios', 'date-fns', 'zustand'],
-          },
-        },
-      },
-      // Minify for production
-      minify: mode === 'production' ? 'terser' : false,
-      // Set chunk size warning limit (in kB)
-      chunkSizeWarningLimit: 1000,
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
     },
-    server: {
-      // Development server configuration
-      port: 5173,
-      strictPort: false,
-      open: true,
-      // Proxy API requests to backend during development
-      proxy: {
-        '/api': {
-          target: 'http://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-        },
-      },
+  },
+  build: {
+    rollupOptions: {
+      // No external dependencies that need to be excluded from the bundle
     },
-    preview: {
-      // Preview server configuration
-      port: 4173,
-      strictPort: false,
-      open: true,
-    },
-  };
+  },
 });
