@@ -1,541 +1,329 @@
-import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { attendanceApi } from '../../api/axios';
 import usePusher from '../../hooks/usePusher';
-import { attendanceApi, scheduleApi, userApi } from '../../api';
 import LoadingSpinner from '../common/LoadingSpinner';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
+import {
+  CheckCircleIcon,
+  XCircleIcon,
+  ExclamationTriangleIcon,
+  UserGroupIcon,
+  ClockIcon,
+} from '@heroicons/react/24/outline';
 
-const ClassAttendanceView = ({ scheduleId, scheduleTitle }) => {
-  const [students, setStudents] = useState([]);
-  const [attendanceRecords, setAttendanceRecords] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [showOverrideModal, setShowOverrideModal] = useState(false);
-  const [overrideReason, setOverrideReason] = useState('');
+const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const queryClient = useQueryClient();
 
-  // Pusher connection for real-time updates
-  const { isConnected, connectionType, lastEvent } = usePusher(scheduleId, {
-    onEvent: handleRealTimeEvent,
-    onConnect: (type) => {
-      console.log(`Connected via ${type}`);
-      toast.success(`Real-time updates connected via ${type}`);
-    },
-    onDisconnect: (type) => {
-      console.log(`Disconnected from ${type}`);
-      toast.error('Real-time updates disconnected');
+  // Fetch attendance data
+  const {
+    data: attendanceData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['schedule-attendance', scheduleId, date],
+    queryFn: () => attendanceApi.getScheduleAttendance(scheduleId, date),
+    enabled: !!scheduleId,
+    refetchInterval: 30000, // Refetch every 30 seconds as fallback
+  });
+
+  // Manual clock-in mutation
+  const manualClockInMutation = useMutation({
+    mutationFn: ({ studentId }) =>
+      attendanceApi.manualClockIn(scheduleId, studentId, date),
+    onSuccess: (data) => {
+      toast.success(`${data.attendance.student_name} has been clocked in`);
+      // Invalidate and refetch attendance data
+      queryClient.invalidateQueries(['schedule-attendance', scheduleId, date]);
     },
     onError: (error) => {
-      console.error('Pusher error:', error);
+      toast.error(error.response?.data?.error || 'Failed to clock in student');
     },
   });
 
-  // Handle incoming Pusher events
-  function handleRealTimeEvent(message) {
-    console.log('Received message:', message);
+  // Real-time updates via Pusher
+  const handleAttendanceUpdate = useCallback(
+    (data) => {
+      // Update the query cache with new data
+      queryClient.setQueryData(
+        ['schedule-attendance', scheduleId, date],
+        (oldData) => {
+          if (!oldData) return oldData;
 
-    switch (message.type) {
-      case 'attendance_update':
-        updateAttendanceRecord(message.payload);
-        break;
-      case 'student_checked_in':
-        handleStudentCheckIn(message.payload);
-        break;
-      case 'student_checked_out':
-        handleStudentCheckOut(message.payload);
-        break;
-      case 'status_change':
-        handleStatusChange(message.payload);
-        break;
-      case 'manual_override':
-        handleManualOverride(message.payload);
-        break;
-      default:
-        console.log('Unknown message type:', message.type);
-    }
-  }
+          const updatedAttendance = oldData.attendance.map((record) => {
+            if (record.student_id === data.student_id) {
+              return {
+                ...record,
+                status: data.status,
+                check_in_time: data.check_in_time,
+                is_manual_override: data.type === 'manual_clock_in',
+              };
+            }
+            return record;
+          });
 
-  // Update attendance record
-  const updateAttendanceRecord = (payload) => {
-    setAttendanceRecords((prev) => ({
-      ...prev,
-      [payload.student_id]: {
-        ...prev[payload.student_id],
-        ...payload,
-      },
-    }));
-  };
+          return {
+            ...oldData,
+            attendance: updatedAttendance,
+            stats: {
+              ...oldData.stats,
+              present: updatedAttendance.filter((r) => r.status === 'PRESENT')
+                .length,
+              late: updatedAttendance.filter((r) => r.status === 'LATE').length,
+              absent: updatedAttendance.filter((r) => r.status === 'ABSENT')
+                .length,
+            },
+          };
+        }
+      );
 
-  // Handle student check-in
-  const handleStudentCheckIn = (payload) => {
-    const { student_id, check_in_time, status } = payload;
-    setAttendanceRecords((prev) => ({
-      ...prev,
-      [student_id]: {
-        ...prev[student_id],
-        status: status || 'present',
-        check_in_time,
-        is_present: true,
-      },
-    }));
-    toast.success(`${payload.student_name || 'Student'} checked in`);
-  };
-
-  // Handle student check-out
-  const handleStudentCheckOut = (payload) => {
-    const { student_id, check_out_time } = payload;
-    setAttendanceRecords((prev) => ({
-      ...prev,
-      [student_id]: {
-        ...prev[student_id],
-        check_out_time,
-      },
-    }));
-    toast.info(`${payload.student_name || 'Student'} checked out`);
-  };
-
-  // Handle status change
-  const handleStatusChange = (payload) => {
-    const { student_id, status, reason } = payload;
-    setAttendanceRecords((prev) => ({
-      ...prev,
-      [student_id]: {
-        ...prev[student_id],
-        status,
-        override_reason: reason,
-      },
-    }));
-  };
-
-  // Handle manual override
-  const handleManualOverride = (payload) => {
-    const { student_id, status, reason, updated_by } = payload;
-    setAttendanceRecords((prev) => ({
-      ...prev,
-      [student_id]: {
-        ...prev[student_id],
-        status,
-        override_reason: reason,
-        manual_override: true,
-        updated_by,
-      },
-    }));
-    toast.success(
-      `Attendance updated for ${payload.student_name || 'student'}`
-    );
-  };
-
-  // Fetch initial data
-  useEffect(() => {
-    fetchAttendanceData();
-  }, [scheduleId]);
-
-  const fetchAttendanceData = async () => {
-    setIsLoading(true);
-    try {
-      // 1) Load schedule to find assigned group
-      const schedRes = await scheduleApi.getSchedule(scheduleId);
-      const groupId = schedRes?.data?.assigned_group_detail?.id;
-
-      // 2) Fetch students for this group via faculty endpoint
-      let studentsData = [];
-      if (groupId) {
-        const studentsResponse = await userApi.getFacultyStudents({
-          group: groupId,
+      // Show notification for automatic clock-ins
+      if (data.type === 'student_clock_in') {
+        toast.success(`${data.student_name} clocked in automatically`, {
+          icon: '📸',
+          duration: 3000,
         });
-        studentsData =
-          studentsResponse.data?.results || studentsResponse.data || [];
       }
+    },
+    [queryClient, scheduleId, date]
+  );
 
-      setStudents(studentsData);
+  // Subscribe to Pusher notifications
+  usePusher(
+    `faculty-schedule-${scheduleId}`,
+    'attendance-notification',
+    handleAttendanceUpdate
+  );
 
-      // Initialize attendance records
-      const records = {};
-      studentsData.forEach((student) => {
-        const key = student.user_id || student.id;
-        records[key] = {
-          status: 'absent',
-          check_in_time: null,
-          check_out_time: null,
-          is_present: false,
-          manual_override: false,
-          override_reason: '',
-        };
-      });
-      setAttendanceRecords(records);
-    } catch (error) {
-      console.error('Error fetching attendance data:', error);
-      toast.error('Failed to load attendance data');
-    } finally {
-      setIsLoading(false);
-    }
+  const attendance = attendanceData?.attendance || [];
+  const schedule = attendanceData?.schedule || {};
+  const stats = attendanceData?.stats || {
+    total: 0,
+    present: 0,
+    late: 0,
+    absent: 0,
   };
 
-  // Open override modal
-  const openOverrideModal = (student) => {
-    setSelectedStudent(student);
-    setOverrideReason('');
-    setShowOverrideModal(true);
-  };
-
-  // Close override modal
-  const closeOverrideModal = () => {
-    setSelectedStudent(null);
-    setOverrideReason('');
-    setShowOverrideModal(false);
-  };
-
-  // Submit manual override
-  const submitOverride = async (status) => {
-    if (!selectedStudent) return;
-
-    try {
-      const response = await attendanceApi.updateRecord(selectedStudent.id, {
-        status,
-        manual_override: true,
-        notes: overrideReason,
-        schedule_id: scheduleId,
-      });
-
-      // Update local state
-      handleManualOverride({
-        student_id: selectedStudent.user_id || selectedStudent.id,
-        student_name: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
-        status,
-        reason: overrideReason,
-      });
-
-      closeOverrideModal();
-    } catch (error) {
-      console.error('Error updating attendance:', error);
-      toast.error('Failed to update attendance');
-    }
-  };
-
-  // Get status badge color
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'present':
-        return 'bg-green-100 text-green-800';
-      case 'late':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'absent':
-        return 'bg-red-100 text-red-800';
-      case 'excused':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Filter students based on search and status
-  const filteredStudents = students.filter((student) => {
-    const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
+  // Filter records
+  const filteredRecords = attendance.filter((record) => {
     const matchesSearch =
-      fullName.includes(searchTerm.toLowerCase()) ||
-      student.employee_id?.toLowerCase().includes(searchTerm.toLowerCase());
+      !searchTerm ||
+      record.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.student_id?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const studentRecord = attendanceRecords[student.user_id || student.id];
     const matchesStatus =
-      filterStatus === 'all' ||
-      (studentRecord && studentRecord.status === filterStatus);
+      filterStatus === 'all' || record.status === filterStatus;
 
     return matchesSearch && matchesStatus;
   });
 
-  // Calculate statistics
-  const stats = {
-    total: students.length,
-    present: Object.values(attendanceRecords).filter(
-      (r) => r.status === 'present'
-    ).length,
-    late: Object.values(attendanceRecords).filter((r) => r.status === 'late')
-      .length,
-    absent: Object.values(attendanceRecords).filter(
-      (r) => r.status === 'absent'
-    ).length,
-    excused: Object.values(attendanceRecords).filter(
-      (r) => r.status === 'excused'
-    ).length,
+  const getStatusBadge = (status) => {
+    const configs = {
+      PRESENT: {
+        icon: CheckCircleIcon,
+        text: 'Present',
+        className: 'bg-green-100 text-green-800',
+      },
+      LATE: {
+        icon: ExclamationTriangleIcon,
+        text: 'Late',
+        className: 'bg-yellow-100 text-yellow-800',
+      },
+      ABSENT: {
+        icon: XCircleIcon,
+        text: 'Absent',
+        className: 'bg-red-100 text-red-800',
+      },
+    };
+
+    const config = configs[status] || configs.ABSENT;
+    const Icon = config.icon;
+
+    return (
+      <span
+        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.className}`}
+      >
+        <Icon className="mr-1 h-3 w-3" />
+        {config.text}
+      </span>
+    );
+  };
+
+  const handleManualClockIn = (studentId, studentName) => {
+    if (window.confirm(`Clock in ${studentName} manually?`)) {
+      manualClockInMutation.mutate({ studentId });
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <LoadingSpinner />
+      <div className="rounded-lg bg-white p-6 shadow">
+        <div className="flex h-32 items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg bg-white p-6 shadow">
+        <div className="text-center text-red-600">
+          Error loading attendance data: {error.message}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Stats */}
-      <div className="rounded-lg bg-white p-6 shadow">
-        <div className="mb-4 flex items-center justify-between">
+    <div className="rounded-lg bg-white shadow">
+      {/* Header with metrics */}
+      <div className="border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {scheduleTitle || 'Class Attendance'}
-            </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              {format(new Date(), 'EEEE, MMMM d, yyyy')}
+            <h3 className="text-lg font-medium text-gray-900">
+              {scheduleTitle || schedule.title}
+            </h3>
+            <p className="text-sm text-gray-500">
+              {schedule.start_time} - {schedule.end_time} • {schedule.date}
             </p>
           </div>
-          <div className="flex items-center space-x-2">
-            <div
-              className={`flex items-center space-x-1 rounded-full px-3 py-1 text-sm ${
-                isConnected
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-red-100 text-red-800'
-              }`}
-            >
-              <div
-                className={`h-2 w-2 rounded-full ${
-                  isConnected ? 'animate-pulse bg-green-500' : 'bg-red-500'
-                }`}
-              ></div>
-              <span>
-                {isConnected ? `Live (${connectionType})` : 'Offline'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Statistics */}
-        <div className="grid grid-cols-5 gap-4">
-          <div className="rounded-lg bg-gray-50 p-3">
-            <p className="text-sm text-gray-600">Total Students</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-          </div>
-          <div className="rounded-lg bg-green-50 p-3">
-            <p className="text-sm text-green-600">Present</p>
-            <p className="text-2xl font-bold text-green-900">{stats.present}</p>
-          </div>
-          <div className="rounded-lg bg-yellow-50 p-3">
-            <p className="text-sm text-yellow-600">Late</p>
-            <p className="text-2xl font-bold text-yellow-900">{stats.late}</p>
-          </div>
-          <div className="rounded-lg bg-red-50 p-3">
-            <p className="text-sm text-red-600">Absent</p>
-            <p className="text-2xl font-bold text-red-900">{stats.absent}</p>
-          </div>
-          <div className="rounded-lg bg-blue-50 p-3">
-            <p className="text-sm text-blue-600">Excused</p>
-            <p className="text-2xl font-bold text-blue-900">{stats.excused}</p>
+          <div className="flex items-center space-x-4 text-sm">
+            <span className="flex items-center text-green-600">
+              <CheckCircleIcon className="mr-1 h-4 w-4" />
+              Present: {stats.present}
+            </span>
+            <span className="flex items-center text-yellow-600">
+              <ExclamationTriangleIcon className="mr-1 h-4 w-4" />
+              Late: {stats.late}
+            </span>
+            <span className="flex items-center text-red-600">
+              <XCircleIcon className="mr-1 h-4 w-4" />
+              Absent: {stats.absent}
+            </span>
+            <span className="text-gray-600">Total: {stats.total}</span>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="rounded-lg bg-white p-4 shadow">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Search Student
-            </label>
+      <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+        <div className="flex items-center space-x-4">
+          <div className="flex-1">
             <input
               type="text"
-              placeholder="Name or ID..."
+              placeholder="Search students..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Filter by Status
-            </label>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
+              className="block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             >
-              <option value="all">All Students</option>
-              <option value="present">Present</option>
-              <option value="late">Late</option>
-              <option value="absent">Absent</option>
-              <option value="excused">Excused</option>
+              <option value="all">All Status</option>
+              <option value="PRESENT">Present</option>
+              <option value="LATE">Late</option>
+              <option value="ABSENT">Absent</option>
             </select>
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={fetchAttendanceData}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700"
-            >
-              Refresh
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Attendance Table */}
-      <div className="overflow-hidden rounded-lg bg-white shadow">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Student
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Check In
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Check Out
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Notes
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {filteredStudents.map((student) => {
-                const record =
-                  attendanceRecords[student.user_id || student.id] || {};
-                return (
-                  <tr key={student.id} className="hover:bg-gray-50">
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-                            <span className="font-medium text-white">
-                              {student.first_name[0]}
-                              {student.last_name[0]}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {student.first_name} {student.last_name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {student.email}
-                          </div>
-                        </div>
+      {/* Attendance table */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Student
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Check In
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Method
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 bg-white">
+            {filteredRecords.map((record, index) => (
+              <tr key={record.student_id || index} className="hover:bg-gray-50">
+                <td className="whitespace-nowrap px-6 py-4">
+                  <div className="flex items-center">
+                    <div className="h-8 w-8 flex-shrink-0">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500">
+                        <span className="text-xs font-medium text-white">
+                          {record.student_name?.[0] || 'S'}
+                        </span>
                       </div>
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                      {student.employee_id || '-'}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(
-                          record.status || 'absent'
-                        )}`}
-                      >
-                        {record.status || 'absent'}
-                        {record.manual_override && (
-                          <svg
-                            className="ml-1 h-3 w-3"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                          </svg>
-                        )}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                      {record.check_in_time
-                        ? format(new Date(record.check_in_time), 'h:mm a')
-                        : '-'}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                      {record.check_out_time
-                        ? format(new Date(record.check_out_time), 'h:mm a')
-                        : '-'}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                      {record.override_reason || '-'}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
-                      <button
-                        onClick={() => openOverrideModal(student)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        Override
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-900">
+                        {record.student_name || 'Unknown Student'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {record.student_id || 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                  {record.check_in_time || 'Not clocked in'}
+                </td>
+                <td className="whitespace-nowrap px-6 py-4">
+                  {getStatusBadge(record.status)}
+                </td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                  {record.is_manual_override ? 'Manual' : 'Automatic'}
+                </td>
+                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
+                  {record.status === 'ABSENT' && (
+                    <button
+                      onClick={() =>
+                        handleManualClockIn(
+                          record.student_id,
+                          record.student_name
+                        )
+                      }
+                      disabled={manualClockInMutation.isLoading}
+                      className="inline-flex items-center rounded-md border border-transparent bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+                    >
+                      <ClockIcon className="mr-1 h-3 w-3" />
+                      Clock In
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-      {/* Manual Override Modal */}
-      {showOverrideModal && selectedStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-75">
-          <div className="w-full max-w-md rounded-lg bg-white p-6">
-            <h3 className="mb-4 text-lg font-medium text-gray-900">
-              Manual Attendance Override
+        {filteredRecords.length === 0 && (
+          <div className="py-12 text-center">
+            <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">
+              No attendance records
             </h3>
-            <p className="mb-4 text-sm text-gray-500">
-              Update attendance for {selectedStudent.first_name}{' '}
-              {selectedStudent.last_name}
+            <p className="mt-1 text-sm text-gray-500">
+              {attendance.length === 0
+                ? 'No attendance data found for this class session.'
+                : 'No records match your current filters.'}
             </p>
-
-            <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Reason for Override
-              </label>
-              <textarea
-                value={overrideReason}
-                onChange={(e) => setOverrideReason(e.target.value)}
-                rows={3}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
-                placeholder="Enter reason (optional)..."
-              />
-            </div>
-
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              <button
-                onClick={() => submitOverride('present')}
-                className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-              >
-                Mark Present
-              </button>
-              <button
-                onClick={() => submitOverride('absent')}
-                className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700"
-              >
-                Mark Absent
-              </button>
-              <button
-                onClick={() => submitOverride('late')}
-                className="rounded-md bg-yellow-600 px-4 py-2 text-white hover:bg-yellow-700"
-              >
-                Mark Late
-              </button>
-              <button
-                onClick={() => submitOverride('excused')}
-                className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-              >
-                Mark Excused
-              </button>
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={closeOverrideModal}
-                className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

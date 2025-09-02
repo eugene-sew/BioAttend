@@ -25,6 +25,7 @@ const AttendanceReports = lazy(
   () => import('../pages/admin/AttendanceReports')
 );
 const GroupManagement = lazy(() => import('../pages/admin/GroupManagement'));
+const Enrollments = lazy(() => import('../pages/admin/Enrollments'));
 
 // Faculty pages
 const FacultyDashboardLayout = lazy(
@@ -42,6 +43,9 @@ const FacultyAttendance = lazy(
 const FacultyStudents = lazy(() => import('../pages/faculty/FacultyStudents'));
 const FacultyMyGroups = lazy(() => import('../pages/faculty/MyGroups'));
 const FacultyCourses = lazy(() => import('../pages/faculty/Courses'));
+const FacultyAttendanceReports = lazy(() => import('../pages/faculty/AttendanceReports'));
+const DetailedAttendance = lazy(() => import('../pages/faculty/DetailedAttendance'));
+const FacultyProfile = lazy(() => import('../pages/faculty/Profile'));
 
 // Student pages
 const StudentDashboardLayout = lazy(
@@ -59,6 +63,8 @@ const AttendanceHistory = lazy(
 const MySchedules = lazy(() => import('../pages/student/MySchedules'));
 const StudentMyGroups = lazy(() => import('../pages/student/MyGroups'));
 const BiometricStatus = lazy(() => import('../pages/student/BiometricStatus'));
+const StudentAttendanceReports = lazy(() => import('../pages/student/AttendanceReports'));
+const StudentProfile = lazy(() => import('../pages/student/Profile'));
 
 // UI Showcase (Development only)
 const UIShowcase = lazy(() => import('../pages/UIShowcase'));
@@ -115,6 +121,7 @@ const AppRoutes = () => {
           <Route path="users" element={<UserManagement />} />
           <Route path="attendance" element={<AttendanceReports />} />
           <Route path="courses" element={<GroupManagement />} />
+          <Route path="enrollments" element={<Enrollments />} />
         </Route>
 
         {/* Faculty Routes */}
@@ -131,10 +138,12 @@ const AppRoutes = () => {
           {/* Faculty routes */}
           <Route path="courses" element={<FacultyCourses />} />
           <Route path="attendance" element={<FacultyAttendance />} />
-          <Route path="reports" element={<AttendanceReport />} />
+          <Route path="attendance/:scheduleId" element={<DetailedAttendance />} />
+          <Route path="reports" element={<FacultyAttendanceReports />} />
           <Route path="students" element={<FacultyStudents />} />
           <Route path="my-groups" element={<FacultyMyGroups />} />
           <Route path="schedules" element={<FacultySchedules />} />
+          <Route path="profile" element={<FacultyProfile />} />
         </Route>
 
         {/* Student Routes */}
@@ -151,9 +160,11 @@ const AppRoutes = () => {
           {/* Student routes */}
           <Route path="attendance" element={<AttendanceHistory />} />
           <Route path="attendance/clock" element={<AttendanceClockInOut />} />
+          <Route path="reports" element={<StudentAttendanceReports />} />
           <Route path="schedule" element={<MySchedules />} />
           <Route path="my-groups" element={<StudentMyGroups />} />
           <Route path="biometric" element={<BiometricStatus />} />
+          <Route path="profile" element={<StudentProfile />} />
         </Route>
 
         {/* Default redirect based on authentication */}

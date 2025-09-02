@@ -34,6 +34,10 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+ 
+
+ 
+
 /**
  * Facial Recognition / Biometric API endpoints
  */
@@ -69,6 +73,17 @@ export const facialApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
       ...configOverrides,
     }),
+
+  /**
+   * Delete enrollment for a student
+   */
+  deleteEnrollment: (studentId) =>
+    axiosInstance.delete(`/api/students/${studentId}/enrollment/`),
+
+  /**
+   * Get enrollment statistics
+   */
+  getEnrollmentStats: () => axiosInstance.get(`/api/enrollment-statistics/`),
 
   /**
    * Smart helpers: try explicit student endpoint first; if permission denied, fall back to self endpoint.
@@ -352,6 +367,48 @@ export const attendanceApi = {
   deleteRecord: (id) => axiosInstance.delete(`/attendance/records/${id}/`),
 
   /**
+   * Request manual attendance check
+   * @param {Object} data - Request data
+   * @returns {Promise} Response
+   */
+  requestManualCheck: (data) => axiosInstance.post('/api/attendance/manual-request/', data),
+
+  /**
+   * Get attendance records for a specific schedule (Faculty)
+   * @param {number} scheduleId - Schedule ID
+   * @param {string} date - Date (optional, defaults to today)
+   * @returns {Promise} Response with attendance data
+   */
+  getScheduleAttendance: (scheduleId, date = null) => {
+    const params = date ? { date } : {};
+    return axiosInstance
+      .get(`/api/attendance/schedule/${scheduleId}/`, { params })
+      .then((r) => r.data);
+  },
+
+  /**
+   * Manually clock in a student (Faculty)
+   * @param {number} scheduleId - Schedule ID
+   * @param {string} studentId - Student ID
+   * @param {string} date - Date (optional, defaults to today)
+   * @returns {Promise} Response with attendance record
+   */
+  manualClockIn: (scheduleId, studentId, date = null) => {
+    const data = { student_id: studentId };
+    if (date) data.date = date;
+    return axiosInstance
+      .post(`/api/attendance/schedule/${scheduleId}/manual-clock-in/`, data)
+      .then((r) => r.data);
+  },
+
+  /**
+   * Process manual attendance (faculty)
+   * @param {Object} data - Manual attendance data
+   * @returns {Promise} Response
+   */
+  manualAttendance: (data) => axiosInstance.post('/api/attendance/manual/', data),
+
+  /**
    * Get attendance statistics
    * @param {Object} params - Query parameters
    * @returns {Promise} Response with statistics
@@ -410,6 +467,18 @@ export const userApi = {
    * @returns {Promise} Response with updated profile
    */
   updateProfile: (data) => axiosInstance.patch('/api/auth/users/me/', data),
+
+  /**
+   * Get all groups (admin only)
+   * @returns {Promise} Response with groups list
+   */
+  getGroups: () => axiosInstance.get('/api/students/groups/'),
+
+  /**
+   * Get faculty's assigned groups
+   * @returns {Promise} Response with faculty groups
+   */
+  getFacultyGroups: () => axiosInstance.get('/api/students/groups/'),
 
   /**
    * Get all users (admin)
@@ -529,7 +598,16 @@ export const userApi = {
    * @returns {Promise} Response with students list
    */
   getFacultyStudents: (params) =>
-    axiosInstance.get('/api/faculty/students/', { params }),
+    axiosInstance.get('/api/faculty/students/', { params }).then(res => {
+      const data = res?.data;
+      if (Array.isArray(data)) {
+        return { results: data, count: data.length };
+      }
+      return {
+        results: data?.results ?? [],
+        count: data?.count ?? 0,
+      };
+    }),
 };
 
 /**
@@ -654,6 +732,24 @@ export const reportsApi = {
 };
 
 /**
+ * Student API endpoints
+ */
+export const studentApi = {
+  /**
+   * Update student profile
+   * @param {string} studentId - Student ID
+   * @param {Object} data - Update data
+   */
+  updateProfile: (studentId, data) => axiosInstance.patch(`/api/students/${studentId}/`, data),
+
+  /**
+   * Get student profile
+   * @param {string} studentId - Student ID
+   */
+  getProfile: (studentId) => axiosInstance.get(`/api/students/${studentId}/`),
+};
+
+/**
  * Groups (Courses) API endpoints
  */
 export const groupsApi = {
@@ -688,6 +784,45 @@ export const groupsApi = {
    * Delete group (admin)
    */
   delete: (id) => axiosInstance.delete(`/api/students/groups/${id}/`),
+};
+
+// Student self-report convenience wrappers (placed after all API objects)
+attendanceApi.getStudentAttendance = async (params = {}) => {
+  const profileRes = await userApi.getProfile();
+  const studentId = profileRes?.data?.student_profile?.student_id;
+  if (!studentId) throw new Error('Student profile not found for current user');
+
+  const reportRes = await axiosInstance.get(`/api/reports/student/${studentId}/`, { params });
+  const stats = reportRes?.data?.statistics || {};
+  return {
+    data: {
+      attendance_rate: stats.attendance_rate ?? 0,
+      total_present: stats.present ?? 0,
+      total_absent: stats.absent ?? 0,
+      total_late: stats.late ?? 0,
+      total_excused: stats.excused ?? 0,
+      total_classes: stats.total_classes ?? 0,
+    },
+  };
+};
+
+attendanceApi.getStudentRecords = async (params = {}) => {
+  const profileRes = await userApi.getProfile();
+  const studentId = profileRes?.data?.student_profile?.student_id;
+  if (!studentId) throw new Error('Student profile not found for current user');
+
+  const reportRes = await axiosInstance.get(`/api/reports/student/${studentId}/`, { params });
+  const records = reportRes?.data?.attendance_records || [];
+  return {
+    data: records.map((r) => ({
+      date: r.date,
+      time: r.check_in_time || r.check_out_time || '',
+      status: r.status,
+      method: r.is_manual_override ? 'Manual' : 'Biometric',
+      course_code: r.course_code,
+      course_title: r.course_title,
+    })),
+  };
 };
 
 // Export the axios instance for custom requests

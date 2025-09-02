@@ -1,46 +1,119 @@
+/* eslint-disable no-unused-vars */
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { attendanceApi } from '../../api/axios';
+import { attendanceApi, groupsApi, facultyApi } from '../../api/axios';
+import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import {
+  ChartBarIcon,
+  DocumentArrowDownIcon,
+  CalendarIcon,
+  UserGroupIcon,
+  AcademicCapIcon,
+  ClockIcon,
+} from '@heroicons/react/24/outline';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 const AttendanceReports = () => {
+  const { user } = useAuthStore();
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+    startDate: new Date(new Date().setDate(new Date().getDate() - 30))
+      .toISOString()
+      .split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
   });
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [selectedRole, setSelectedRole] = useState('all');
-  const [reportType, setReportType] = useState('summary'); // summary, detailed, individual
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [reportType, setReportType] = useState('summary');
 
-  // Fetch attendance statistics
-  const { data: statsData, isLoading: statsLoading } = useQuery({
-    queryKey: ['attendance-stats', dateRange, selectedDepartment, selectedRole],
-    queryFn: () => attendanceApi.getStatistics({
-      from: dateRange.startDate,
-      to: dateRange.endDate,
-      department: selectedDepartment === 'all' ? undefined : selectedDepartment,
-      role: selectedRole === 'all' ? undefined : selectedRole
-    })
+  // Fetch groups based on user role
+  const { data: groupsData } = useQuery({
+    queryKey: ['groups', user?.role],
+    queryFn: async () => {
+      if (user?.role === 'ADMIN') {
+        // Admin can see all groups
+        const groups = await groupsApi.list();
+        return groups;
+      } else if (user?.role === 'FACULTY') {
+        // Faculty can see only their assigned groups
+        const groups = await facultyApi.getMyGroups();
+        return groups;
+      }
+      return [];
+    },
+    enabled: !!user && user.role !== 'STUDENT',
   });
 
-  // Fetch detailed attendance records
+  // Set default group for faculty users
+  useEffect(() => {
+    if (user?.role === 'FACULTY' && groupsData?.length > 0 && !selectedGroup) {
+      setSelectedGroup(groupsData[0].id.toString());
+    } else if (
+      user?.role === 'ADMIN' &&
+      groupsData?.length > 0 &&
+      !selectedGroup
+    ) {
+      setSelectedGroup(groupsData[0].id.toString());
+    }
+  }, [groupsData, user?.role, selectedGroup]);
+
+  // Fetch attendance report (admin/faculty) or student summary (student)
+  const {
+    data: statsData,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useQuery({
+    queryKey: ['attendance-report', dateRange, selectedGroup, user?.role],
+    queryFn: async () => {
+      const params = {
+        from: dateRange.startDate,
+        to: dateRange.endDate,
+      };
+
+      if (user?.role === 'STUDENT') {
+        // Students get their own compact statistics
+        return await attendanceApi.getStudentAttendance(params);
+      } else {
+        // Admin and Faculty need group parameter (by group CODE)
+        if (!selectedGroup) {
+          throw new Error('Please select a group');
+        }
+        const code = groupsData?.find(
+          (g) => g.id.toString() === selectedGroup
+        )?.code;
+        if (!code) {
+          throw new Error('Selected group code not found');
+        }
+        params.group = code;
+        // Use rich report endpoint with overall stats + daily + absentees + punctuality
+        return await attendanceApi.getReport(params);
+      }
+    },
+    enabled: !!user && (user.role === 'STUDENT' || !!selectedGroup),
+  });
+
+  // Fetch detailed attendance for students only (admin/faculty use aggregates instead)
   const { data: recordsData, isLoading: recordsLoading } = useQuery({
-    queryKey: ['attendance-records', dateRange, selectedDepartment, selectedRole],
-    queryFn: () => attendanceApi.getRecords({
-      from: dateRange.startDate,
-      to: dateRange.endDate,
-      department: selectedDepartment === 'all' ? undefined : selectedDepartment,
-      role: selectedRole === 'all' ? undefined : selectedRole
-    }),
-    enabled: reportType === 'detailed'
+    queryKey: ['attendance-records', dateRange, user?.role],
+    queryFn: async () => {
+      const params = {
+        from: dateRange.startDate,
+        to: dateRange.endDate,
+      };
+
+      if (user?.role === 'STUDENT') {
+        return await attendanceApi.getStudentRecords(params);
+      }
+      return null;
+    },
+    enabled: reportType === 'detailed' && !!user && user.role === 'STUDENT',
   });
 
   const handleDateChange = (field, value) => {
-    setDateRange(prev => ({
+    setDateRange((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
@@ -48,446 +121,778 @@ const AttendanceReports = () => {
     try {
       let csvContent = '';
       let data = [];
-      let headers = [];
 
-      if (reportType === 'summary') {
-        headers = ['Metric', 'Value'];
-        data = [
-          ['Total Users', statsData?.total_users || 0],
-          ['Average Attendance Rate', `${statsData?.average_attendance_rate || 0}%`],
-          ['Total Present Days', statsData?.total_present || 0],
-          ['Total Absent Days', statsData?.total_absent || 0],
-          ['Total Late Arrivals', statsData?.total_late || 0],
-          ['Most Punctual Department', statsData?.most_punctual_department || 'N/A'],
-          ['Report Period', `${dateRange.startDate} to ${dateRange.endDate}`]
-        ];
-      } else if (reportType === 'detailed' && recordsData?.results) {
-        headers = ['Date', 'Name', 'Email', 'Department', 'Check In', 'Check Out', 'Status', 'Duration'];
-        data = recordsData.results.map(record => [
-          new Date(record.date).toLocaleDateString(),
-          `${record.user?.first_name} ${record.user?.last_name}`,
-          record.user?.email,
-          record.user?.department || 'N/A',
-          record.check_in_time || 'N/A',
-          record.check_out_time || 'N/A',
-          record.status,
-          record.duration || 'N/A'
-        ]);
+      if (reportType === 'summary' && statsData?.data) {
+        if (user?.role === 'STUDENT') {
+          const stats = statsData.data;
+          csvContent = 'Metric,Value\n';
+          csvContent += `Attendance Rate,${stats.attendance_rate || 0}%\n`;
+          csvContent += `Present,${stats.total_present || 0}\n`;
+          csvContent += `Late,${stats.total_late || 0}\n`;
+          csvContent += `Absent,${stats.total_absent || 0}\n`;
+          csvContent += `Total Classes,${stats.total_classes || 0}\n`;
+        } else {
+          const report = statsData.data;
+          csvContent =
+            'Date,Present,Absent,Late,Excused,Total Students,Attendance %\n';
+          (report.daily_attendance || []).forEach((day) => {
+            csvContent += `${day.date},${day.present_count},${day.absent_count},${day.late_count},${day.excused_count},${day.total_students},${Math.round(day.attendance_percentage || 0)}\n`;
+          });
+        }
+      } else if (reportType === 'detailed' && recordsData?.data) {
+        csvContent = 'Student,Date,Time,Status,Method\n';
+        recordsData.data.forEach((record) => {
+          csvContent += `${record.student_name},${record.date},${record.time},${record.status},${record.method}\n`;
+        });
+      } else if (
+        reportType === 'detailed' &&
+        statsData?.data &&
+        user?.role !== 'STUDENT'
+      ) {
+        // For Admin/Faculty, export Top Absentees and Punctuality tables instead
+        const report = statsData.data;
+        csvContent = 'Most Absent Students\n';
+        csvContent += 'Student ID,First Name,Last Name,Email,Absence Count\n';
+        (report.most_absent_students || []).forEach((s) => {
+          csvContent += `${s.student__student_id},${s.student__user__first_name},${s.student__user__last_name},${s.student__user__email},${s.absence_count}\n`;
+        });
+        csvContent += '\nPunctuality Distribution\n';
+        csvContent += 'Status,Count\n';
+        (report.punctuality_distribution || []).forEach((p) => {
+          csvContent += `${p.status},${p.count}\n`;
+        });
       }
 
-      // Build CSV content
-      csvContent = headers.join(',') + '\n';
-      data.forEach(row => {
-        csvContent += row.map(cell => `"${cell}"`).join(',') + '\n';
-      });
-
-      // Download CSV
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `attendance_report_${dateRange.startDate}_${dateRange.endDate}.csv`);
+      link.setAttribute(
+        'download',
+        `attendance_report_${dateRange.startDate}_to_${dateRange.endDate}.csv`
+      );
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      toast.success('Report exported to CSV successfully');
+      toast.success('Report exported successfully');
     } catch (error) {
-      toast.error('Failed to export CSV');
-      console.error('Export error:', error);
+      toast.error('Failed to export report');
     }
   };
 
   const exportToPDF = () => {
     try {
       const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.width;
-      
-      // Add header
+
+      // Header
       doc.setFontSize(20);
-      doc.text('Attendance Report', pageWidth / 2, 20, { align: 'center' });
-      
+      doc.text('Attendance Report', 20, 20);
+
       doc.setFontSize(12);
-      doc.text(`Period: ${dateRange.startDate} to ${dateRange.endDate}`, pageWidth / 2, 30, { align: 'center' });
-      
-      if (reportType === 'summary') {
-        // Summary statistics
-        doc.setFontSize(14);
-        doc.text('Summary Statistics', 20, 45);
-        
-        const summaryData = [
-          ['Total Users', statsData?.total_users || 0],
-          ['Average Attendance Rate', `${statsData?.average_attendance_rate || 0}%`],
-          ['Total Present Days', statsData?.total_present || 0],
-          ['Total Absent Days', statsData?.total_absent || 0],
-          ['Total Late Arrivals', statsData?.total_late || 0],
-          ['Most Punctual Department', statsData?.most_punctual_department || 'N/A']
-        ];
-        
+      doc.text(
+        `Period: ${dateRange.startDate} to ${dateRange.endDate}`,
+        20,
+        35
+      );
+
+      if (user?.role !== 'STUDENT' && selectedGroup) {
+        const groupName =
+          groupsData?.find((g) => g.id.toString() === selectedGroup)?.name ||
+          'Unknown';
+        doc.text(`Group: ${groupName}`, 20, 45);
+      }
+
+      if (reportType === 'summary' && statsData?.data) {
+        if (user?.role === 'STUDENT') {
+          const stats = statsData.data;
+          // Summary stats (student)
+          doc.text('Summary Statistics:', 20, 60);
+          doc.text(`Total Present: ${stats.total_present || 0}`, 30, 75);
+          doc.text(`Total Absent: ${stats.total_absent || 0}`, 30, 85);
+          doc.text(`Total Late: ${stats.total_late || 0}`, 30, 95);
+          doc.text(`Attendance Rate: ${stats.attendance_rate || 0}%`, 30, 105);
+        } else {
+          const report = statsData.data;
+          const overall = report.overall_statistics || {};
+          // Summary stats (admin/faculty)
+          doc.text('Summary Statistics:', 20, 60);
+          doc.text(`Total Classes: ${overall.total_classes || 0}`, 30, 75);
+          doc.text(
+            `Total Records: ${overall.total_attendance_records || 0}`,
+            30,
+            85
+          );
+          doc.text(
+            `Average Attendance Rate: ${overall.average_attendance_rate || 0}%`,
+            30,
+            95
+          );
+
+          // Daily breakdown
+          if (report.daily_attendance && report.daily_attendance.length > 0) {
+            const tableData = report.daily_attendance.map((day) => [
+              day.date,
+              String(day.present_count ?? 0),
+              String(day.absent_count ?? 0),
+              String(day.late_count ?? 0),
+              String(day.excused_count ?? 0),
+              String(day.total_students ?? 0),
+              `${Math.round(day.attendance_percentage ?? 0)}%`,
+            ]);
+
+            doc.autoTable({
+              head: [
+                [
+                  'Date',
+                  'Present',
+                  'Absent',
+                  'Late',
+                  'Excused',
+                  'Total Students',
+                  'Attendance %',
+                ],
+              ],
+              body: tableData,
+              startY: 110,
+            });
+          }
+        }
+      } else if (reportType === 'detailed' && recordsData?.data) {
+        const tableData = recordsData.data
+          .slice(0, 50)
+          .map((record) => [
+            record.student_name || 'N/A',
+            record.date || 'N/A',
+            record.time || 'N/A',
+            record.status || 'N/A',
+            record.method || 'N/A',
+          ]);
+
         doc.autoTable({
-          startY: 50,
-          head: [['Metric', 'Value']],
-          body: summaryData,
-          theme: 'grid',
-          headStyles: { fillColor: [79, 70, 229] }
+          head: [['Student', 'Date', 'Time', 'Status', 'Method']],
+          body: tableData,
+          startY: 60,
         });
 
-        // Add charts section if data available
-        if (statsData?.daily_attendance) {
-          doc.addPage();
-          doc.setFontSize(14);
-          doc.text('Daily Attendance Trend', 20, 20);
-          
-          const dailyData = Object.entries(statsData.daily_attendance).map(([date, count]) => [
-            new Date(date).toLocaleDateString(),
-            count
+        if (recordsData.data.length > 50) {
+          doc.text(
+            `Note: Showing first 50 records of ${recordsData.data.length} total records`,
+            20,
+            doc.lastAutoTable.finalY + 10
+          );
+        }
+      } else if (
+        reportType === 'detailed' &&
+        statsData?.data &&
+        user?.role !== 'STUDENT'
+      ) {
+        const report = statsData.data;
+        // Top absentees table
+        if (
+          report.most_absent_students &&
+          report.most_absent_students.length > 0
+        ) {
+          const tableData = report.most_absent_students.map((s) => [
+            s.student__student_id,
+            s.student__user__first_name,
+            s.student__user__last_name,
+            s.student__user__email,
+            String(s.absence_count),
           ]);
-          
           doc.autoTable({
-            startY: 30,
-            head: [['Date', 'Attendance Count']],
-            body: dailyData,
-            theme: 'grid',
-            headStyles: { fillColor: [79, 70, 229] }
+            head: [
+              [
+                'Student ID',
+                'First Name',
+                'Last Name',
+                'Email',
+                'Absence Count',
+              ],
+            ],
+            body: tableData,
+            startY: 60,
           });
         }
-      } else if (reportType === 'detailed' && recordsData?.results) {
-        // Detailed records
-        doc.setFontSize(14);
-        doc.text('Detailed Attendance Records', 20, 45);
-        
-        const tableData = recordsData.results.map(record => [
-          new Date(record.date).toLocaleDateString(),
-          `${record.user?.first_name} ${record.user?.last_name}`,
-          record.user?.department || 'N/A',
-          record.check_in_time || 'N/A',
-          record.check_out_time || 'N/A',
-          record.status
-        ]);
-        
-        doc.autoTable({
-          startY: 50,
-          head: [['Date', 'Name', 'Department', 'Check In', 'Check Out', 'Status']],
-          body: tableData,
-          theme: 'grid',
-          headStyles: { fillColor: [79, 70, 229] },
-          styles: { fontSize: 8 }
-        });
+        // Punctuality distribution table
+        if (
+          report.punctuality_distribution &&
+          report.punctuality_distribution.length > 0
+        ) {
+          const startY = doc.lastAutoTable?.finalY
+            ? doc.lastAutoTable.finalY + 10
+            : 60;
+          const tableData2 = report.punctuality_distribution.map((p) => [
+            p.status,
+            String(p.count),
+          ]);
+          doc.autoTable({
+            head: [['Status', 'Count']],
+            body: tableData2,
+            startY,
+          });
+        }
       }
-      
-      // Save PDF
-      doc.save(`attendance_report_${dateRange.startDate}_${dateRange.endDate}.pdf`);
-      toast.success('Report exported to PDF successfully');
+
+      doc.save(
+        `attendance_report_${dateRange.startDate}_to_${dateRange.endDate}.pdf`
+      );
+      toast.success('PDF exported successfully');
     } catch (error) {
       toast.error('Failed to export PDF');
-      console.error('Export error:', error);
     }
   };
 
-  const stats = statsData || {};
-  const records = recordsData?.results || [];
+  if (statsError) {
+    return (
+      <div className="p-6">
+        <div className="rounded-md border border-red-200 bg-red-50 p-4">
+          <div className="flex">
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">
+                Error Loading Reports
+              </h3>
+              <div className="mt-2 text-sm text-red-700">
+                {statsError.response?.data?.error || statsError.message}
+              </div>
+              {user?.role !== 'STUDENT' && !selectedGroup && (
+                <div className="mt-2 text-sm text-red-700">
+                  Please select a group to view attendance reports.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Attendance Reports</h2>
-        
-        {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Start Date
-            </label>
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) => handleDateChange('startDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              End Date
-            </label>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) => handleDateChange('endDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Department
-            </label>
-            <select
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="all">All Departments</option>
-              <option value="Computer Science">Computer Science</option>
-              <option value="Engineering">Engineering</option>
-              <option value="Business">Business</option>
-              <option value="Arts">Arts</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Role
-            </label>
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="all">All Roles</option>
-              <option value="STUDENT">Students</option>
-              <option value="FACULTY">Faculty</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Report Type
-            </label>
-            <select
-              value={reportType}
-              onChange={(e) => setReportType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="summary">Summary</option>
-              <option value="detailed">Detailed</option>
-              <option value="individual">Individual</option>
-            </select>
-          </div>
+      <div className="sm:flex sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Attendance Reports
+          </h1>
+          <p className="mt-2 text-sm text-gray-700">
+            {user?.role === 'STUDENT'
+              ? 'View your attendance records and statistics'
+              : user?.role === 'FACULTY'
+                ? 'View attendance reports for your assigned groups'
+                : 'View comprehensive attendance reports for all groups'}
+          </p>
         </div>
-
-        {/* Export Buttons */}
-        <div className="flex gap-3 mb-6">
-          <button
-            onClick={exportToCSV}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-          >
-            <span className="flex items-center">
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+          <div className="flex space-x-3">
+            <button
+              onClick={exportToCSV}
+              className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              <DocumentArrowDownIcon className="mr-2 h-4 w-4" />
               Export CSV
-            </span>
-          </button>
-          <button
-            onClick={exportToPDF}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-          >
-            <span className="flex items-center">
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
+            </button>
+            <button
+              onClick={exportToPDF}
+              className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+            >
+              <DocumentArrowDownIcon className="mr-2 h-4 w-4" />
               Export PDF
-            </span>
-          </button>
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="rounded-lg bg-white shadow">
+        <div className="p-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Date Range */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Start Date
+              </label>
+              <div className="relative mt-1">
+                <input
+                  type="date"
+                  value={dateRange.startDate}
+                  onChange={(e) =>
+                    handleDateChange('startDate', e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+                <CalendarIcon className="pointer-events-none absolute right-3 top-2 h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                End Date
+              </label>
+              <div className="relative mt-1">
+                <input
+                  type="date"
+                  value={dateRange.endDate}
+                  onChange={(e) => handleDateChange('endDate', e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+                <CalendarIcon className="pointer-events-none absolute right-3 top-2 h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+
+            {/* Group Selection (Admin and Faculty only) */}
+            {user?.role !== 'STUDENT' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {user?.role === 'FACULTY' ? 'Your Groups' : 'Select Group'}
+                </label>
+                <div className="relative mt-1">
+                  <select
+                    value={selectedGroup}
+                    onChange={(e) => setSelectedGroup(e.target.value)}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">Select a group...</option>
+                    {groupsData?.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name} ({group.code})
+                      </option>
+                    ))}
+                  </select>
+                  <UserGroupIcon className="pointer-events-none absolute right-8 top-2 h-5 w-5 text-gray-400" />
+                </div>
+              </div>
+            )}
+
+            {/* Report Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Report Type
+              </label>
+              <div className="relative mt-1">
+                <select
+                  value={reportType}
+                  onChange={(e) => setReportType(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="summary">Summary</option>
+                  <option value="detailed">Detailed Records</option>
+                </select>
+                <ChartBarIcon className="pointer-events-none absolute right-8 top-2 h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {user?.role !== 'STUDENT' && !selectedGroup && (
+        <div className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
+          Please select a group to view attendance reports.
+        </div>
+      )}
+
       {/* Statistics Cards */}
-      {reportType === 'summary' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
-                <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-5">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Average Attendance
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900">
-                    {stats.average_attendance_rate || 0}%
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-blue-500 rounded-md p-3">
-                <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-              <div className="ml-5">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Total Present
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900">
-                    {stats.total_present || 0}
-                  </dd>
-                </dl>
+      {reportType === 'summary' && statsData?.data && (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <AcademicCapIcon className="h-6 w-6 text-green-400" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="truncate text-sm font-medium text-gray-500">
+                      Total Present
+                    </dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {user?.role === 'STUDENT'
+                        ? statsData.data.total_present || 0
+                        : statsData.data.overall_statistics
+                            ?.total_attendance_records || 0}
+                    </dd>
+                  </dl>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-red-500 rounded-md p-3">
-                <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                    d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </div>
-              <div className="ml-5">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Total Absent
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900">
-                    {stats.total_absent || 0}
-                  </dd>
-                </dl>
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <ClockIcon className="h-6 w-6 text-yellow-400" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="truncate text-sm font-medium text-gray-500">
+                      Total Late
+                    </dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {user?.role === 'STUDENT'
+                        ? statsData.data.total_late || 0
+                        : (statsData.data.daily_attendance || []).reduce(
+                            (sum, d) => sum + (d.late_count || 0),
+                            0
+                          )}
+                    </dd>
+                  </dl>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-yellow-500 rounded-md p-3">
-                <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-400">
+                    <span className="text-xs font-bold text-white">X</span>
+                  </div>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="truncate text-sm font-medium text-gray-500">
+                      Total Absent
+                    </dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {user?.role === 'STUDENT'
+                        ? statsData.data.total_absent || 0
+                        : (statsData.data.daily_attendance || []).reduce(
+                            (sum, d) => sum + (d.absent_count || 0),
+                            0
+                          )}
+                    </dd>
+                  </dl>
+                </div>
               </div>
-              <div className="ml-5">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Late Arrivals
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900">
-                    {stats.total_late || 0}
-                  </dd>
-                </dl>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-400">
+                    <span className="text-xs font-bold text-white">%</span>
+                  </div>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="truncate text-sm font-medium text-gray-500">
+                      Attendance Rate
+                    </dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {user?.role === 'STUDENT'
+                        ? Math.round(statsData.data.attendance_rate || 0)
+                        : Math.round(
+                            statsData.data.overall_statistics
+                              ?.average_attendance_rate || 0
+                          )}
+                      %
+                    </dd>
+                  </dl>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Detailed Table */}
-      {reportType === 'detailed' && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Detailed Attendance Records</h3>
-          
-          {recordsLoading ? (
-            <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      {reportType === 'detailed' &&
+        user?.role !== 'STUDENT' &&
+        statsData?.data &&
+        !statsLoading && (
+          <div className="space-y-6">
+            {/* Most Absent Students */}
+            <div className="rounded-lg bg-white shadow">
+              <div className="border-b border-gray-200 px-6 py-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Most Absent Students (Top 10)
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                {statsData.data.most_absent_students &&
+                statsData.data.most_absent_students.length > 0 ? (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Student ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          First Name
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Last Name
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Email
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Absence Count
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {statsData.data.most_absent_students.map((s, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {s.student__student_id}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {s.student__user__first_name}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {s.student__user__last_name}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {s.student__user__email}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {s.absence_count}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="py-12 text-center">
+                    <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">
+                      No absent student insights
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      No absence data found for the selected period.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          ) : (
+
+            {/* Punctuality Distribution */}
+            <div className="rounded-lg bg-white shadow">
+              <div className="border-b border-gray-200 px-6 py-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Punctuality Distribution
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                {statsData.data.punctuality_distribution &&
+                statsData.data.punctuality_distribution.length > 0 ? (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Count
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {statsData.data.punctuality_distribution.map((p, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {p.status}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {p.count}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="py-12 text-center">
+                    <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">
+                      No punctuality insights
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      No punctuality data found for the selected period.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* Loading States */}
+      {(statsLoading || recordsLoading) && (
+        <div className="flex h-64 items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      )}
+
+      {/* Summary Report */}
+      {reportType === 'summary' && statsData?.data && !statsLoading && (
+        <div className="rounded-lg bg-white shadow">
+          <div className="border-b border-gray-200 px-6 py-4">
+            <h3 className="text-lg font-medium text-gray-900">
+              Daily Attendance Summary
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Present
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Late
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Absent
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Total
+                  </th>
+                  {user?.role !== 'STUDENT' && (
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Attendance %
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {(user?.role === 'STUDENT'
+                  ? []
+                  : statsData.data.daily_attendance || []
+                ).map((day, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                      {day.date}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-green-600">
+                      {day.present_count}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-yellow-600">
+                      {day.late_count}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-red-600">
+                      {day.absent_count}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                      {day.total_students}
+                    </td>
+                    {user?.role !== 'STUDENT' && (
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        {Math.round(day.attendance_percentage || 0)}%
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {user?.role !== 'STUDENT' &&
+              (!statsData.data.daily_attendance ||
+                statsData.data.daily_attendance.length === 0) && (
+                <div className="py-12 text-center">
+                  <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">
+                    No data available
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    No attendance data found for the selected period.
+                  </p>
+                </div>
+              )}
+          </div>
+        </div>
+      )}
+
+      {/* Detailed / Insights */}
+      {reportType === 'detailed' &&
+        user?.role === 'STUDENT' &&
+        recordsData?.data &&
+        !recordsLoading && (
+          <div className="rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h3 className="text-lg font-medium text-gray-900">
+                Detailed Attendance Records
+              </h3>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {user?.role !== 'STUDENT' && (
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Student
+                      </th>
+                    )}
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Date
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Name
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Time
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Department
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Check In
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Check Out
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Duration
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Method
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {records.map((record) => (
-                    <tr key={record.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(record.date).toLocaleDateString()}
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {recordsData.data.map((record, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      {user?.role !== 'STUDENT' && (
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                          {record.student_name || 'N/A'}
+                        </td>
+                      )}
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        {record.date}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center">
-                              <span className="text-white font-medium">
-                                {record.user?.first_name?.[0]}{record.user?.last_name?.[0]}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {record.user?.first_name} {record.user?.last_name}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {record.user?.email}
-                            </div>
-                          </div>
-                        </div>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        {record.time}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.user?.department || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.check_in_time || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.check_out_time || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                          ${record.status === 'PRESENT' ? 'bg-green-100 text-green-800' : 
-                            record.status === 'ABSENT' ? 'bg-red-100 text-red-800' :
-                            record.status === 'LATE' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'}`}>
+                      <td className="whitespace-nowrap px-6 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                            record.status === 'PRESENT'
+                              ? 'bg-green-100 text-green-800'
+                              : record.status === 'LATE'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                          }`}
+                        >
                           {record.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.duration || 'N/A'}
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                        {record.method || 'Manual'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Chart Section */}
-      {reportType === 'summary' && statsData?.daily_attendance && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Daily Attendance Trend</h3>
-          <div className="h-64 flex items-center justify-center text-gray-500">
-            {/* Placeholder for chart - you can integrate a charting library like recharts */}
-            <p>Chart visualization would go here (integrate with recharts or chart.js)</p>
+              {recordsData.data.length === 0 && (
+                <div className="py-12 text-center">
+                  <ClockIcon className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">
+                    No records found
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    No attendance records found for the selected period.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 };

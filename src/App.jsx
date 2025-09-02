@@ -22,7 +22,7 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <ErrorBoundary showDetails={process.env.NODE_ENV === 'development'}>
+    <ErrorBoundary showDetails={import.meta.env.VITE_MODE === 'development'}>
       <ThemeProvider>
         <QueryClientProvider client={queryClient}>
           <Router>
@@ -47,13 +47,13 @@ function App() {
                 },
               }}
             />
-            
+
             {/* Our custom Toast component using Zustand */}
             <Toast />
-            
+
             {/* Global Modal component */}
             <GlobalModal />
-            
+
             <ErrorBoundary>
               <AppRoutes />
             </ErrorBoundary>

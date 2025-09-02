@@ -1,11 +1,12 @@
+/* eslint-disable no-unused-vars */
 import React, { useEffect } from 'react';
 import { useUIStore, uiSelectors } from '../../store';
-import { 
-  CheckCircleIcon, 
-  XCircleIcon, 
-  ExclamationTriangleIcon, 
+import {
+  CheckCircleIcon,
+  XCircleIcon,
+  ExclamationTriangleIcon,
   InformationCircleIcon,
-  XMarkIcon 
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 const Toast = () => {
@@ -15,7 +16,7 @@ const Toast = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm">
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm space-y-2">
       {toasts.map((toast) => (
         <ToastItem
           key={toast.id}
@@ -47,9 +48,11 @@ const ToastItem = ({ toast, onClose }) => {
   };
 
   const bgColors = {
-    success: 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800',
+    success:
+      'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800',
     error: 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800',
-    warning: 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800',
+    warning:
+      'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800',
     info: 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800',
   };
 
@@ -73,36 +76,27 @@ const ToastItem = ({ toast, onClose }) => {
   return (
     <div
       id={`toast-${toast.id}`}
-      className={`
-        flex items-start p-4 rounded-lg border shadow-lg
-        ${bgColors[type] || bgColors.info}
-        transition-all duration-300 ease-in-out
-        min-w-[300px] max-w-[400px]
-      `}
+      className={`flex items-start rounded-lg border p-4 shadow-lg ${bgColors[type] || bgColors.info} min-w-[300px] max-w-[400px] transition-all duration-300 ease-in-out`}
       role="alert"
     >
-      <div className="flex-shrink-0">
-        {icons[type] || icons.info}
-      </div>
+      <div className="flex-shrink-0">{icons[type] || icons.info}</div>
       <div className="ml-3 flex-1">
         {title && (
-          <p className={`text-sm font-medium ${textColors[type] || textColors.info}`}>
+          <p
+            className={`text-sm font-medium ${textColors[type] || textColors.info}`}
+          >
             {title}
           </p>
         )}
-        <p className={`text-sm ${textColors[type] || textColors.info} ${title ? 'mt-1' : ''}`}>
+        <p
+          className={`text-sm ${textColors[type] || textColors.info} ${title ? 'mt-1' : ''}`}
+        >
           {message}
         </p>
       </div>
       <button
         onClick={handleClose}
-        className={`
-          ml-4 inline-flex rounded-md p-1.5
-          ${textColors[type] || textColors.info}
-          hover:bg-gray-100 dark:hover:bg-gray-700
-          focus:outline-none focus:ring-2 focus:ring-offset-2
-          focus:ring-gray-500
-        `}
+        className={`ml-4 inline-flex rounded-md p-1.5 ${textColors[type] || textColors.info} hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:hover:bg-gray-700`}
       >
         <span className="sr-only">Close</span>
         <XMarkIcon className="h-4 w-4" />
@@ -145,7 +139,10 @@ const styles = `
 `;
 
 // Add styles to document if not already present
-if (typeof document !== 'undefined' && !document.getElementById('toast-animations')) {
+if (
+  typeof document !== 'undefined' &&
+  !document.getElementById('toast-animations')
+) {
   const styleSheet = document.createElement('style');
   styleSheet.id = 'toast-animations';
   styleSheet.textContent = styles;

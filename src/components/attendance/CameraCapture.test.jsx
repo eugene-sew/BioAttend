@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '../../test/test-utils';
-import userEvent from '@testing-library/user-event';
 import CameraCapture from './CameraCapture';
 
 describe('CameraCapture', () => {

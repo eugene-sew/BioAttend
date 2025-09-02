@@ -1,7 +1,48 @@
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { userApi, attendanceApi } from '../../api/axios';
+import useAuthStore from '../../store/authStore';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
+import {
+  AcademicCapIcon,
+  ClockIcon,
+  CalendarIcon,
+  ChartBarIcon,
+  UserGroupIcon,
+  CheckCircleIcon
+} from '@heroicons/react/24/outline';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+
+  // Fetch student profile
+  const { data: profileData, isLoading: profileLoading } = useQuery({
+    queryKey: ['student-profile'],
+    queryFn: () => userApi.getProfile(),
+    enabled: !!user
+  });
+
+  // Fetch student attendance stats
+  const { data: attendanceStats } = useQuery({
+    queryKey: ['student-attendance-stats'],
+    queryFn: () => attendanceApi.getStudentAttendance({
+      from: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+      to: new Date().toISOString().split('T')[0]
+    }),
+    enabled: !!user
+  });
+
+  if (profileLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  const studentProfile = profileData?.data?.student_profile;
+  const stats = attendanceStats?.data || {};
 
   return (
     <div className="space-y-6">
@@ -9,21 +50,26 @@ const StudentDashboard = () => {
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Welcome to Student Dashboard
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Welcome back, {user?.first_name || 'Student'}!
             </h2>
-            <p className="text-gray-600">
-              View your courses, attendance records, and class schedules.
-            </p>
+            {studentProfile && (
+              <div className="space-y-1 text-sm text-gray-600">
+                <p>Student ID: <span className="font-medium">{studentProfile.student_id}</span></p>
+                {studentProfile.group && (
+                  <p>Course: <span className="font-medium">{studentProfile.group.name} ({studentProfile.group.code})</span></p>
+                )}
+                <p>Status: <span className={`font-medium ${studentProfile.status === 'ACTIVE' ? 'text-green-600' : 'text-red-600'}`}>
+                  {studentProfile.status}
+                </span></p>
+              </div>
+            )}
           </div>
           <button
             onClick={() => navigate('/student/attendance/clock')}
             className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <ClockIcon className="w-5 h-5" />
             Clock In/Out
           </button>
         </div>
@@ -34,10 +80,7 @@ const StudentDashboard = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
-              <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+              <AcademicCapIcon className="h-6 w-6 text-white" />
             </div>
             <div className="ml-5">
               <dl>
@@ -45,7 +88,7 @@ const StudentDashboard = () => {
                   Enrolled Courses
                 </dt>
                 <dd className="text-2xl font-semibold text-gray-900">
-                  0
+                  {studentProfile?.group ? 1 : 0}
                 </dd>
               </dl>
             </div>
@@ -55,18 +98,33 @@ const StudentDashboard = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
-              <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <CheckCircleIcon className="h-6 w-6 text-white" />
             </div>
             <div className="ml-5">
               <dl>
                 <dt className="text-sm font-medium text-gray-500 truncate">
-                  Overall Attendance
+                  Attendance Rate
                 </dt>
                 <dd className="text-2xl font-semibold text-gray-900">
-                  0%
+                  {Math.round(stats.attendance_rate || 0)}%
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 bg-blue-500 rounded-md p-3">
+              <CalendarIcon className="h-6 w-6 text-white" />
+            </div>
+            <div className="ml-5">
+              <dl>
+                <dt className="text-sm font-medium text-gray-500 truncate">
+                  Days Present
+                </dt>
+                <dd className="text-2xl font-semibold text-gray-900">
+                  {stats.total_present || 0}
                 </dd>
               </dl>
             </div>
@@ -76,69 +134,119 @@ const StudentDashboard = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0 bg-yellow-500 rounded-md p-3">
-              <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <ClockIcon className="h-6 w-6 text-white" />
             </div>
             <div className="ml-5">
               <dl>
                 <dt className="text-sm font-medium text-gray-500 truncate">
-                  Classes Today
+                  Late Arrivals
                 </dt>
                 <dd className="text-2xl font-semibold text-gray-900">
-                  0
+                  {stats.total_late || 0}
                 </dd>
               </dl>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Course Information */}
+      {studentProfile?.group && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="flex items-center mb-4">
+            <UserGroupIcon className="h-6 w-6 text-gray-400 mr-2" />
+            <h3 className="text-lg font-medium text-gray-900">My Course</h3>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Course Name</dt>
+                <dd className="text-sm text-gray-900 font-medium">{studentProfile.group.name}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Course Code</dt>
+                <dd className="text-sm text-gray-900 font-medium">{studentProfile.group.code}</dd>
+              </div>
+              {studentProfile.group.academic_year && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Academic Year</dt>
+                  <dd className="text-sm text-gray-900">{studentProfile.group.academic_year}</dd>
+                </div>
+              )}
+              {studentProfile.group.semester && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Semester</dt>
+                  <dd className="text-sm text-gray-900">{studentProfile.group.semester}</dd>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center mb-4">
+            <ClockIcon className="h-6 w-6 text-indigo-600 mr-2" />
+            <h3 className="text-lg font-medium text-gray-900">Attendance</h3>
+          </div>
+          <p className="text-gray-600 mb-4">View your attendance history and clock in/out</p>
+          <button
+            onClick={() => navigate('/student/attendance')}
+            className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            View Attendance
+          </button>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
-              <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+          <div className="flex items-center mb-4">
+            <ChartBarIcon className="h-6 w-6 text-green-600 mr-2" />
+            <h3 className="text-lg font-medium text-gray-900">Reports</h3>
+          </div>
+          <p className="text-gray-600 mb-4">View detailed attendance reports and statistics</p>
+          <button
+            onClick={() => navigate('/student/reports')}
+            className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+          >
+            View Reports
+          </button>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center mb-4">
+            <UserGroupIcon className="h-6 w-6 text-purple-600 mr-2" />
+            <h3 className="text-lg font-medium text-gray-900">Biometric</h3>
+          </div>
+          <p className="text-gray-600 mb-4">Manage your biometric enrollment status</p>
+          <button
+            onClick={() => navigate('/student/biometric')}
+            className="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
+          >
+            Biometric Status
+          </button>
+        </div>
+      </div>
+
+      {/* No Course Warning */}
+      {!studentProfile?.group && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
             </div>
-            <div className="ml-5">
-              <dl>
-                <dt className="text-sm font-medium text-gray-500 truncate">
-                  Biometric Status
-                </dt>
-                <dd className="text-sm font-semibold text-green-600">
-                  Active
-                </dd>
-              </dl>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">No Course Assigned</h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>You are not currently enrolled in any course. Please contact your administrator to be assigned to a course.</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Today's Schedule */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Today's Classes</h3>
-        <div className="text-center py-8 text-gray-500">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <p className="mt-2">No classes scheduled for today</p>
-        </div>
-      </div>
-
-      {/* Recent Attendance */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Attendance</h3>
-        <div className="text-center py-8 text-gray-500">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          <p className="mt-2">No attendance records yet</p>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

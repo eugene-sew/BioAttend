@@ -30,6 +30,7 @@
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
     "jszip": "^3.10.1",
+    "lucide-react": "^0.542.0",
     "pusher-js": "^8.4.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import useAuthStore from '../store/authStore';
 
 /**
@@ -9,11 +10,13 @@ class ApiClient {
     const resolvedBase =
       baseURL ||
       // Vite style env
-      (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
-      // CRA / Node style env (guard process for browsers)
-      (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) ||
+      (typeof import.meta !== 'undefined' &&
+        import.meta.env &&
+        import.meta.env.VITE_API_URL) ||
       // Optional global config
-      (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.API_URL) ||
+      (typeof window !== 'undefined' &&
+        window.__ENV__ &&
+        window.__ENV__.API_URL) ||
       '';
     this.baseURL = resolvedBase;
     this.refreshPromise = null;
@@ -56,7 +59,7 @@ class ApiClient {
    */
   async request(url, options = {}, retryOnUnauthorized = true) {
     const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
-    
+
     // Merge headers with auth headers
     const headers = {
       'Content-Type': 'application/json',
@@ -74,13 +77,13 @@ class ApiClient {
       // Handle 401 Unauthorized
       if (response.status === 401 && retryOnUnauthorized) {
         const isRefreshing = useAuthStore.getState().getIsRefreshing();
-        
+
         // Don't retry if we're already refreshing or if this is a refresh request
         if (!isRefreshing && !url.includes('/auth/refresh')) {
           try {
             // Attempt to refresh token
             await this.refreshToken();
-            
+
             // Retry the original request with new token
             return this.request(url, options, false);
           } catch (error) {
@@ -94,7 +97,9 @@ class ApiClient {
       // Handle non-2xx responses
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        const error = new Error(
+          errorData.message || `HTTP ${response.status}: ${response.statusText}`
+        );
         error.status = response.status;
         error.data = errorData;
         throw error;
@@ -105,7 +110,7 @@ class ApiClient {
       if (contentType && contentType.includes('application/json')) {
         return await response.json();
       }
-      
+
       return response.text();
     } catch (error) {
       // Network error or other fetch errors
@@ -162,7 +167,7 @@ class ApiClient {
    */
   async upload(url, formData, options = {}) {
     const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
-    
+
     // Don't set Content-Type for FormData, let browser set it with boundary
     const headers = {
       ...this.getAuthHeaders(),
@@ -179,7 +184,9 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Upload failed: ${response.statusText}`);
+      throw new Error(
+        errorData.message || `Upload failed: ${response.statusText}`
+      );
     }
 
     return response.json();

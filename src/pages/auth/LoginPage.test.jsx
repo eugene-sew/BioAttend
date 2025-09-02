@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+/* eslint-disable no-unused-vars */
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '../../test/test-utils';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -14,7 +15,7 @@ describe('LoginPage Integration Tests', () => {
 
   it('should successfully login with valid credentials', async () => {
     const user = userEvent.setup();
-    
+
     // Override the default handler for this test
     server.use(
       http.post('/api/auth/login', async ({ request }) => {
@@ -56,7 +57,7 @@ describe('LoginPage Integration Tests', () => {
 
   it('should display error message on login failure', async () => {
     const user = userEvent.setup();
-    
+
     // Mock failed login
     server.use(
       http.post('/api/auth/login', async ({ request }) => {
@@ -80,7 +81,9 @@ describe('LoginPage Integration Tests', () => {
 
     // Wait for error message
     await waitFor(() => {
-      expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/invalid email or password/i)
+      ).toBeInTheDocument();
     });
 
     // Verify user is not authenticated
@@ -90,7 +93,7 @@ describe('LoginPage Integration Tests', () => {
 
   it('should handle network errors gracefully', async () => {
     const user = userEvent.setup();
-    
+
     // Mock network error
     server.use(
       http.post('/api/auth/login', () => {
@@ -117,7 +120,7 @@ describe('LoginPage Integration Tests', () => {
 
   it('should validate required fields', async () => {
     const user = userEvent.setup();
-    
+
     render(<LoginPage />);
 
     // Try to submit without filling fields
@@ -133,7 +136,7 @@ describe('LoginPage Integration Tests', () => {
 
   it('should validate email format', async () => {
     const user = userEvent.setup();
-    
+
     render(<LoginPage />);
 
     const emailInput = screen.getByLabelText(/email/i);
@@ -153,11 +156,11 @@ describe('LoginPage Integration Tests', () => {
 
   it('should show loading state during login', async () => {
     const user = userEvent.setup();
-    
+
     // Add delay to response to test loading state
     server.use(
       http.post('/api/auth/login', async ({ request }) => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         return HttpResponse.json({
           accessToken: 'token',
           refreshToken: 'refresh',
@@ -189,11 +192,11 @@ describe('LoginPage Integration Tests', () => {
 
   it('should toggle password visibility', async () => {
     const user = userEvent.setup();
-    
+
     render(<LoginPage />);
 
     const passwordInput = screen.getByLabelText(/password/i);
-    
+
     // Initially password should be hidden
     expect(passwordInput).toHaveAttribute('type', 'password');
 
@@ -211,7 +214,7 @@ describe('LoginPage Integration Tests', () => {
 
   it('should navigate to forgot password page', async () => {
     const user = userEvent.setup();
-    
+
     render(<LoginPage />);
 
     const forgotPasswordLink = screen.getByText(/forgot password/i);
@@ -225,7 +228,7 @@ describe('LoginPage Integration Tests', () => {
 
   it('should persist login state after successful login', async () => {
     const user = userEvent.setup();
-    
+
     server.use(
       http.post('/api/auth/login', async ({ request }) => {
         return HttpResponse.json({

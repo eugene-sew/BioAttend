@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 // Utility: strip data URL prefix to base64 string
 const dataURLToBase64 = (dataUrl) => {
   if (typeof dataUrl !== 'string') return '';
@@ -48,9 +49,17 @@ const getFriendlyError = (error, fallback = 'Something went wrong') => {
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Toaster, toast } from 'react-hot-toast';
-import axiosInstance from '../../api/axios';
+import { attendanceApi } from '../../api/axios';
 import CameraCapture from '../../components/attendance/CameraCapture';
+import toast from 'react-hot-toast';
+import {
+  ClockIcon,
+  CameraIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  HandRaisedIcon,
+} from '@heroicons/react/24/outline';
+import axiosInstance from '../../api/axios';
 import Loader, { CardSkeletonLoader } from '../../components/common/Loader';
 
 const AttendanceClockInOut = () => {
@@ -194,11 +203,14 @@ const AttendanceClockInOut = () => {
       // Some backends return 200 with success:false and a message
       const msg = data?.message || '';
       const lower = (msg || '').toLowerCase();
-      if (data?.success === false || lower.includes('no active facial enrollment')) {
+      if (
+        data?.success === false ||
+        lower.includes('no active facial enrollment')
+      ) {
         toast.error(
           lower.includes('no active facial enrollment')
             ? 'No face enrollment found. Please enroll your face under Profile → Biometrics before clocking in.'
-            : (msg || 'Clock-in failed')
+            : msg || 'Clock-in failed'
         );
         return;
       }
@@ -226,11 +238,14 @@ const AttendanceClockInOut = () => {
     onSuccess: (data) => {
       const msg = data?.message || '';
       const lower = (msg || '').toLowerCase();
-      if (data?.success === false || lower.includes('no active facial enrollment')) {
+      if (
+        data?.success === false ||
+        lower.includes('no active facial enrollment')
+      ) {
         toast.error(
           lower.includes('no active facial enrollment')
             ? 'No face enrollment found. Please enroll your face under Profile → Biometrics before clocking out.'
-            : (msg || 'Clock-out failed')
+            : msg || 'Clock-out failed'
         );
         return;
       }
@@ -269,7 +284,38 @@ const AttendanceClockInOut = () => {
     }
   };
 
-  // Open camera for clock in/out
+  // Manual check request mutation
+  const manualRequestMutation = useMutation({
+    mutationFn: async ({ scheduleId, reason }) => {
+      const response = await attendanceApi.requestManualCheck({
+        schedule_id: scheduleId,
+        reason: reason || 'Facial recognition issue',
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast.success('Manual check request sent to your lecturer');
+      // Optionally trigger Pusher notification here
+    },
+    onError: (error) => {
+      toast.error(
+        getFriendlyError(error, 'Failed to send manual check request')
+      );
+    },
+  });
+
+  const handleManualRequest = (schedule) => {
+    const reason = prompt(
+      'Please provide a reason for manual check request (optional):'
+    );
+    if (reason !== null) {
+      // User didn't cancel
+      manualRequestMutation.mutate({
+        scheduleId: schedule.id,
+        reason: reason.trim() || 'Facial recognition issue',
+      });
+    }
+  };
   const openCameraForAttendance = (schedule, type) => {
     setSelectedSchedule(schedule);
     setClockType(type);
@@ -299,12 +345,21 @@ const AttendanceClockInOut = () => {
     if (!status || status.status === 'not_marked') {
       // Can clock in
       return (
-        <button
-          onClick={() => openCameraForAttendance(schedule, 'in')}
-          className="rounded-md bg-green-600 px-4 py-2 text-white transition-colors hover:bg-green-700"
-        >
-          Clock In
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => openCameraForAttendance(schedule, 'in')}
+            className="rounded-md bg-green-600 px-4 py-2 text-white transition-colors hover:bg-green-700"
+          >
+            Clock In
+          </button>
+          <button
+            onClick={() => handleManualRequest(schedule)}
+            className="rounded-md bg-blue-600 px-3 py-2 text-white transition-colors hover:bg-blue-700"
+            title="Request manual check from lecturer"
+          >
+            <HandRaisedIcon className="h-4 w-4" />
+          </button>
+        </div>
       );
     } else if (status.status === 'clocked_in') {
       // Can clock out

@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
@@ -26,7 +27,7 @@ const FacultySchedules = () => {
   const handleFormSubmit = (schedule) => {
     setShowForm(false);
     setSelectedSchedule(null);
-    setRefreshList(prev => prev + 1); // Trigger list refresh
+    setRefreshList((prev) => prev + 1); // Trigger list refresh
   };
 
   const handleFormCancel = () => {
@@ -35,7 +36,7 @@ const FacultySchedules = () => {
   };
 
   const handleDelete = () => {
-    setRefreshList(prev => prev + 1); // Trigger list refresh
+    setRefreshList((prev) => prev + 1); // Trigger list refresh
   };
 
   // If navigated from Courses page with prefill data, open form automatically
@@ -53,10 +54,12 @@ const FacultySchedules = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex justify-between items-center">
+      <div className="rounded-lg bg-white p-6 shadow">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Schedule Management</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Schedule Management
+            </h1>
             <p className="mt-1 text-sm text-gray-500">
               Create and manage class schedules
             </p>
@@ -64,11 +67,20 @@ const FacultySchedules = () => {
           {!showForm && canManage && (
             <button
               onClick={handleCreateNew}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors flex items-center space-x-2"
+              className="flex items-center space-x-2 rounded-md bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M12 4v16m8-8H4" />
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
               </svg>
               <span>New Schedule</span>
             </button>
@@ -78,8 +90,8 @@ const FacultySchedules = () => {
 
       {/* Form or List */}
       {showForm && canManage ? (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">
+        <div className="rounded-lg bg-white p-6 shadow">
+          <h2 className="mb-4 text-lg font-medium text-gray-900">
             {selectedSchedule ? 'Edit Schedule' : 'Create New Schedule'}
           </h2>
           <ScheduleForm

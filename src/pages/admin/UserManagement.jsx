@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userApi, facultyApi } from '../../api/axios';
+import { userApi, facultyApi, studentApi } from '../../api/axios';
 import axiosInstance from '../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -104,6 +104,7 @@ const UserManagement = () => {
     mutationFn: ({ id, data }) => userApi.updateUser(id, data),
     onSuccess: async (updatedUser) => {
       try {
+        // Handle faculty group assignments
         if ((editingUser?.role || formData.role) === 'FACULTY') {
           const selectedGroupIds = Array.isArray(formData.groups)
             ? formData.groups.map((g) => Number(g))
@@ -118,9 +119,26 @@ const UserManagement = () => {
             await facultyApi.update(facultyId, { groups: selectedGroupIds });
           }
         }
+        
+        // Handle student course assignment
+        if ((editingUser?.role || formData.role) === 'STUDENT' && formData.group) {
+          try {
+            // Update student profile with new group
+            const studentId = editingUser?.student_profile?.student_id;
+            if (studentId) {
+              await studentApi.updateProfile(studentId, {
+                group: formData.group
+              });
+            }
+          } catch (studentError) {
+            console.error('Failed to update student course:', studentError);
+            toast.error('User updated, but failed to assign course');
+          }
+        }
+        
         toast.success('User updated successfully');
       } catch (err) {
-        console.error('Failed to sync faculty groups', err);
+        console.error('Failed to sync user assignments', err);
         toast.error('User updated, but failed to assign courses');
       } finally {
         queryClient.invalidateQueries(['users']);
@@ -162,16 +180,13 @@ const UserManagement = () => {
         last_name: user.last_name || '',
         email: user.email || '',
         role: user.role || 'STUDENT',
-        department: user.department || '',
-        student_id: user.student_id || '',
-        faculty_id: user.faculty_id || '',
+        department: user.faculty_profile?.department || '',
+        student_id: user.student_profile?.student_id || '',
+        faculty_id: user.faculty_profile?.faculty_id || '',
         is_active: user.is_active !== undefined ? user.is_active : true,
-        group: user.group || '',
-        groups: Array.isArray(user.groups)
-          ? user.groups.length > 0 && typeof user.groups[0] === 'object'
-            ? user.groups.map((g) => g.id)
-            : user.groups
-          : [],
+        group: user.student_profile?.group?.id || '',
+        groups: user.faculty_profile?.groups ? 
+          user.faculty_profile.groups.map(g => g.id) : [],
       });
     } else {
       setEditingUser(null);
@@ -235,8 +250,14 @@ const UserManagement = () => {
     delete submitData.groups;
 
     if (editingUser) {
+      // Validation for editing users
+      if (formData.role === 'STUDENT' && !formData.group) {
+        toast.error('Please select a Course for the student');
+        return;
+      }
       updateUserMutation.mutate({ id: editingUser.id, data: submitData });
     } else {
+      // Validation for creating users
       if (formData.role === 'STUDENT' && !formData.group) {
         toast.error('Please select a Course for the student');
         return;

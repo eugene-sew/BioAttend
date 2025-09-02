@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import apiClient from '../../utils/apiClient';
+import { userApi } from '../../api/axios';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 const defaultColumns = [
@@ -52,12 +52,9 @@ export default function FacultyStudents() {
     setIsLoading(true);
     setError('');
     try {
-      // Faculty-scoped endpoint with server-side filtering (append query param)
-      const url = search
-        ? `api/faculty/students/?search=${encodeURIComponent(search)}`
-        : 'api/faculty/students/';
-      const res = await apiClient.get(url);
-      const results = Array.isArray(res) ? res : res?.results || [];
+      // Use the userApi method instead of direct URL
+      const response = await userApi.getFacultyStudents({ search });
+      const results = response?.results || [];
       const normalized = results.map(normalizeStudent);
       setStudents(normalized);
     } catch (e) {

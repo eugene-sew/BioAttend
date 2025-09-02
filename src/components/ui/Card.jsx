@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { cn } from '../../utils/cn';
 
 const Card = ({ 

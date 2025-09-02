@@ -4,8 +4,7 @@ import react from '@vitejs/plugin-react';
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   // Different base paths for different deployment scenarios
-  const base = process.env.VITE_BASE_PATH || 
-    (mode === 'production' ? '/static/front/' : '/');
+  const base = mode === 'production' ? '/static/front/' : '/';
 
   return {
     plugins: [react()],
@@ -38,7 +37,7 @@ export default defineConfig(({ mode }) => {
       // Proxy API requests to backend during development
       proxy: {
         '/api': {
-          target: process.env.VITE_API_URL || 'http://localhost:8000',
+          target: 'http://localhost:8000',
           changeOrigin: true,
           secure: false,
         },
