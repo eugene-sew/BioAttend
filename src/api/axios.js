@@ -10,6 +10,7 @@ const axiosInstance = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
   },
 });
 
@@ -34,10 +35,6 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
- 
-
- 
-
 /**
  * Facial Recognition / Biometric API endpoints
  */
@@ -47,7 +44,8 @@ export const facialApi = {
    * If no enrollment exists, backend may return 404.
    * @param {string|number} studentId
    */
-  getEnrollment: (studentId) => axiosInstance.get(`/api/students/${studentId}/enrollment/`),
+  getEnrollment: (studentId) =>
+    axiosInstance.get(`/api/students/${studentId}/enrollment/`),
 
   /**
    * Get enrollment for current authenticated student (self)
@@ -102,10 +100,14 @@ export const facialApi = {
 
   enrollSmart: async (studentId, formData, configOverrides = {}) => {
     try {
-      return await axiosInstance.post(`/api/students/${studentId}/enroll/`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        ...configOverrides,
-      });
+      return await axiosInstance.post(
+        `/api/students/${studentId}/enroll/`,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          ...configOverrides,
+        }
+      );
     } catch (err) {
       const status = err?.response?.status;
       if (status === 403 || status === 401) {
@@ -341,7 +343,8 @@ export const attendanceApi = {
    * @returns {Promise} Response with attendance records
    */
   // Backend provides attendance aggregate/list under reports
-  getRecords: (params) => axiosInstance.get('/api/reports/attendance/', { params }),
+  getRecords: (params) =>
+    axiosInstance.get('/api/reports/attendance/', { params }),
 
   /**
    * Get single attendance record
@@ -371,7 +374,8 @@ export const attendanceApi = {
    * @param {Object} data - Request data
    * @returns {Promise} Response
    */
-  requestManualCheck: (data) => axiosInstance.post('/api/attendance/manual-request/', data),
+  requestManualCheck: (data) =>
+    axiosInstance.post('/api/attendance/manual-request/', data),
 
   /**
    * Get attendance records for a specific schedule (Faculty)
@@ -406,21 +410,24 @@ export const attendanceApi = {
    * @param {Object} data - Manual attendance data
    * @returns {Promise} Response
    */
-  manualAttendance: (data) => axiosInstance.post('/api/attendance/manual/', data),
+  manualAttendance: (data) =>
+    axiosInstance.post('/api/attendance/manual/', data),
 
   /**
    * Get attendance statistics
    * @param {Object} params - Query parameters
    * @returns {Promise} Response with statistics
    */
-  getStatistics: (params) => axiosInstance.get('/api/reports/charts/', { params }),
+  getStatistics: (params) =>
+    axiosInstance.get('/api/reports/charts/', { params }),
 
   /**
    * Get attendance report
    * @param {Object} params - Report parameters
    * @returns {Promise} Response with report data
    */
-  getReport: (params) => axiosInstance.get('/api/reports/attendance/', { params }),
+  getReport: (params) =>
+    axiosInstance.get('/api/reports/attendance/', { params }),
 
   /**
    * Get individual student's attendance report
@@ -598,7 +605,7 @@ export const userApi = {
    * @returns {Promise} Response with students list
    */
   getFacultyStudents: (params) =>
-    axiosInstance.get('/api/faculty/students/', { params }).then(res => {
+    axiosInstance.get('/api/faculty/students/', { params }).then((res) => {
       const data = res?.data;
       if (Array.isArray(data)) {
         return { results: data, count: data.length };
@@ -641,7 +648,8 @@ export const scheduleApi = {
    * @param {Object} data - Update data
    * @returns {Promise} Response with updated schedule
    */
-  updateSchedule: (id, data) => axiosInstance.patch(`/api/schedules/${id}/`, data),
+  updateSchedule: (id, data) =>
+    axiosInstance.patch(`/api/schedules/${id}/`, data),
 
   /**
    * Delete schedule
@@ -657,7 +665,10 @@ export const scheduleApi = {
    * @returns {Promise} Response with user schedule
    */
   getUserSchedule: (userId, params) =>
-    axiosInstance.get(userId ? `/api/schedules/user/${userId}/` : '/api/schedules/my/', { params }),
+    axiosInstance.get(
+      userId ? `/api/schedules/user/${userId}/` : '/api/schedules/my/',
+      { params }
+    ),
 
   /**
    * Get schedule templates
@@ -679,7 +690,8 @@ export const scheduleApi = {
    * @param {Object} data - Schedule data to check
    * @returns {Promise} Response with conflicts
    */
-  checkConflicts: (data) => axiosInstance.post('/api/schedules/conflicts/', data),
+  checkConflicts: (data) =>
+    axiosInstance.post('/api/schedules/conflicts/', data),
 
   /**
    * Bulk create schedules
@@ -704,18 +716,21 @@ export const facultyApi = {
   /**
    * Get current faculty's assigned groups (courses)
    */
-  getMyGroups: () => axiosInstance.get('/api/faculty/my-groups/').then((r) => r.data),
+  getMyGroups: () =>
+    axiosInstance.get('/api/faculty/my-groups/').then((r) => r.data),
   /**
    * List faculty with optional filters (e.g., by user)
    * @param {Object} params - e.g., { user: <userId> }
    */
-  list: (params = {}) => axiosInstance.get('/api/faculty/', { params }).then((r) => r.data),
+  list: (params = {}) =>
+    axiosInstance.get('/api/faculty/', { params }).then((r) => r.data),
   /**
    * Update a faculty record (e.g., assign groups)
    * @param {number|string} id - Faculty PK
    * @param {Object} data - Partial update payload
    */
-  update: (id, data) => axiosInstance.patch(`/api/faculty/${id}/`, data).then((r) => r.data),
+  update: (id, data) =>
+    axiosInstance.patch(`/api/faculty/${id}/`, data).then((r) => r.data),
 };
 
 /**
@@ -740,7 +755,8 @@ export const studentApi = {
    * @param {string} studentId - Student ID
    * @param {Object} data - Update data
    */
-  updateProfile: (studentId, data) => axiosInstance.patch(`/api/students/${studentId}/`, data),
+  updateProfile: (studentId, data) =>
+    axiosInstance.patch(`/api/students/${studentId}/`, data),
 
   /**
    * Get student profile
@@ -756,30 +772,41 @@ export const groupsApi = {
   /**
    * List groups with optional params
    */
-  list: (params) => axiosInstance.get('/api/students/groups/', { params }).then((res) => {
-    const data = res?.data;
-    if (Array.isArray(data)) return data;
-    return data?.results ?? [];
-  }),
+  list: (params) =>
+    axiosInstance.get('/api/students/groups/', { params }).then((res) => {
+      const data = res?.data;
+      if (Array.isArray(data)) return data;
+      return data?.results ?? [];
+    }),
   /**
    * Retrieve single group
    */
-  get: (id) => axiosInstance.get(`/api/students/groups/${id}/`).then((r) => r.data),
+  get: (id) =>
+    axiosInstance.get(`/api/students/groups/${id}/`).then((r) => r.data),
   /**
    * Create group (admin)
    */
   create: (data) => {
     const payload = { ...data };
     // Backend currently requires semester; default to 1 if omitted by UI
-    if (payload.semester === undefined || payload.semester === null || payload.semester === '') {
+    if (
+      payload.semester === undefined ||
+      payload.semester === null ||
+      payload.semester === ''
+    ) {
       payload.semester = 'Spring';
     }
-    return axiosInstance.post('/api/students/groups/', payload).then((r) => r.data);
+    return axiosInstance
+      .post('/api/students/groups/', payload)
+      .then((r) => r.data);
   },
   /**
    * Update group (admin)
    */
-  update: (id, data) => axiosInstance.patch(`/api/students/groups/${id}/`, data).then((r) => r.data),
+  update: (id, data) =>
+    axiosInstance
+      .patch(`/api/students/groups/${id}/`, data)
+      .then((r) => r.data),
   /**
    * Delete group (admin)
    */
@@ -792,7 +819,10 @@ attendanceApi.getStudentAttendance = async (params = {}) => {
   const studentId = profileRes?.data?.student_profile?.student_id;
   if (!studentId) throw new Error('Student profile not found for current user');
 
-  const reportRes = await axiosInstance.get(`/api/reports/student/${studentId}/`, { params });
+  const reportRes = await axiosInstance.get(
+    `/api/reports/student/${studentId}/`,
+    { params }
+  );
   const stats = reportRes?.data?.statistics || {};
   return {
     data: {
@@ -811,7 +841,10 @@ attendanceApi.getStudentRecords = async (params = {}) => {
   const studentId = profileRes?.data?.student_profile?.student_id;
   if (!studentId) throw new Error('Student profile not found for current user');
 
-  const reportRes = await axiosInstance.get(`/api/reports/student/${studentId}/`, { params });
+  const reportRes = await axiosInstance.get(
+    `/api/reports/student/${studentId}/`,
+    { params }
+  );
   const records = reportRes?.data?.attendance_records || [];
   return {
     data: records.map((r) => ({
