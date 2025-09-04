@@ -30,126 +30,6 @@ const StepsHeader = ({ step }) => (
   </div>
 );
 
-function VideoRecorder({ onRecorded, maxSeconds = 8 }) {
-  const videoRef = useRef(null);
-  const mediaRef = useRef({ stream: null, recorder: null, chunks: [] });
-  const [recording, setRecording] = useState(false);
-  const [error, setError] = useState('');
-  const [duration, setDuration] = useState(0);
-  const timerRef = useRef(null);
-
-  const cleanup = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    const { stream, recorder } = mediaRef.current;
-    if (recorder && recorder.state !== 'inactive') {
-      try {
-        recorder.stop();
-      } catch (e) {
-        console.debug('MediaRecorder stop error (cleanup):', e);
-      }
-    }
-    if (stream) stream.getTracks().forEach((t) => t.stop());
-    mediaRef.current = { stream: null, recorder: null, chunks: [] };
-    setRecording(false);
-    setDuration(0);
-  }, []);
-
-  const start = useCallback(async () => {
-    setError('');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
-        audio: false,
-      });
-      const videoEl = videoRef.current;
-      if (videoEl) {
-        videoEl.srcObject = stream;
-        await videoEl.play();
-      }
-
-      const mime = MediaRecorder.isTypeSupported('video/mp4;codecs=h264')
-        ? 'video/mp4;codecs=h264'
-        : MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-          ? 'video/webm;codecs=vp9'
-          : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-            ? 'video/webm;codecs=vp8'
-            : 'video/webm';
-
-      const recorder = new MediaRecorder(stream, {
-        mimeType: mime,
-        videoBitsPerSecond: 2_000_000,
-      });
-      mediaRef.current = { stream, recorder, chunks: [] };
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) mediaRef.current.chunks.push(e.data);
-      };
-      recorder.onstop = () => {
-        const blob = new Blob(mediaRef.current.chunks, { type: mime });
-        onRecorded?.(blob);
-        cleanup();
-      };
-
-      recorder.start();
-      setRecording(true);
-      let sec = 0;
-      timerRef.current = setInterval(() => {
-        sec += 1;
-        setDuration(sec);
-        if (sec >= maxSeconds) stop();
-      }, 1000);
-    } catch (e) {
-      setError(e?.message || 'Failed to access camera');
-      cleanup();
-    }
-  }, [cleanup, maxSeconds, onRecorded, stop]);
-
-  const stop = useCallback(() => {
-    const { recorder } = mediaRef.current;
-    if (recorder && recorder.state !== 'inactive') {
-      try {
-        recorder.stop();
-      } catch (e) {
-        console.debug('MediaRecorder stop error (stop):', e);
-      }
-    }
-  }, []);
-
-  return (
-    <div className="w-full">
-      <div className="aspect-video overflow-hidden rounded-lg bg-white">
-        <video ref={videoRef} className="h-full w-full" playsInline muted />
-      </div>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-      <div className="mt-3 flex items-center justify-between">
-        <div className="text-sm text-gray-600">
-          {recording ? `Recording… ${duration}s / ${maxSeconds}s` : 'Ready'}
-        </div>
-        {recording ? (
-          <button
-            type="button"
-            onClick={stop}
-            className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700"
-          >
-            Stop
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={start}
-            className="rounded-md bg-black px-4 py-2 text-white hover:bg-gray-900"
-          >
-            Start Recording
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function BiometricEnrollmentModal({
   isOpen,
   onClose,
@@ -162,8 +42,7 @@ export default function BiometricEnrollmentModal({
   const [images, setImages] = useState([]); // data URLs
   const [isProcessing, setIsProcessing] = useState(false);
   const cameraRef = useRef(null);
-  const [mode, setMode] = useState('images'); // 'images' | 'video'
-  const [videoBlob, setVideoBlob] = useState(null);
+  
 
   const progressPct = useMemo(
     () => Math.round((images.length / MAX_IMAGES) * 100),
@@ -174,8 +53,7 @@ export default function BiometricEnrollmentModal({
     setStep(1);
     setImages([]);
     setIsProcessing(false);
-    setMode('images');
-    setVideoBlob(null);
+    
   }, []);
 
   const handleStart = () => {
@@ -210,42 +88,23 @@ export default function BiometricEnrollmentModal({
 
   const handleSubmit = async () => {
     console.debug('[Enroll] submit clicked');
-
-    if (mode === 'images' && images.length !== MAX_IMAGES) {
+    if (images.length !== MAX_IMAGES) {
       toast.error(`Please capture ${MAX_IMAGES} images before submitting.`);
-      return;
-    }
-    if (mode === 'video' && !videoBlob) {
-      toast.error('Please record a short video first.');
       return;
     }
     try {
       console.debug('[Enroll] submit clicked', {
-        mode,
         imagesCount: images.length,
-        hasVideoBlob: !!videoBlob,
         studentIdProp: studentId,
       });
       setIsProcessing(true);
       setStep(3);
       let payloadFile;
       let filename;
-      if (mode === 'images') {
-        toast.loading('Packaging images…', { id: 'enroll-progress' });
-        const zipBlob = await buildZipBlob();
-        payloadFile = zipBlob;
-        filename = `biometric_${studentId || 'me'}.zip`;
-      } else {
-        // video
-        payloadFile = videoBlob;
-        const t = videoBlob?.type || '';
-        const ext = t.includes('mp4')
-          ? 'mp4'
-          : t.includes('webm')
-            ? 'webm'
-            : 'mp4';
-        filename = `biometric_${studentId || 'me'}.${ext}`;
-      }
+      toast.loading('Packaging images…', { id: 'enroll-progress' });
+      const zipBlob = await buildZipBlob();
+      payloadFile = zipBlob;
+      filename = `biometric_${studentId || 'me'}.zip`;
 
       toast.loading('Uploading enrollment…', { id: 'enroll-progress' });
       const form = new FormData();
@@ -321,18 +180,10 @@ export default function BiometricEnrollmentModal({
             console.debug('[BiometricEnrollmentModal] submit button clicked');
             handleSubmit();
           }}
-          disabled={
-            (mode === 'images' && images.length !== MAX_IMAGES) ||
-            (mode === 'video' && !videoBlob) ||
-            isProcessing
-          }
-          className={`rounded-md px-4 py-2 text-white ${((mode === 'images' && images.length === MAX_IMAGES) || (mode === 'video' && !!videoBlob)) && !isProcessing ? 'bg-black hover:bg-gray-900' : 'bg-gray-400'}`}
+          disabled={images.length !== MAX_IMAGES || isProcessing}
+          className={`rounded-md px-4 py-2 text-white ${images.length === MAX_IMAGES && !isProcessing ? 'bg-black hover:bg-gray-900' : 'bg-gray-400'}`}
         >
-          {isProcessing
-            ? 'Processing…'
-            : mode === 'images'
-              ? 'Process & Submit'
-              : 'Upload Video'}
+          {isProcessing ? 'Processing…' : 'Process & Submit'}
         </button>
       )}
       {step >= 3 && (
@@ -386,28 +237,8 @@ export default function BiometricEnrollmentModal({
               />
             </svg>
             <div>
-              <p className="mb-2">Choose how you want to enroll your face:</p>
-              <div className="inline-flex overflow-hidden rounded-md border">
-                <button
-                  type="button"
-                  onClick={() => setMode('images')}
-                  className={`px-3 py-1 text-sm ${mode === 'images' ? 'bg-black text-white' : 'bg-white text-gray-700'}`}
-                >
-                  Capture 5 Images
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('video')}
-                  className={`border-l px-3 py-1 text-sm ${mode === 'video' ? 'bg-black text-white' : 'bg-white text-gray-700'}`}
-                >
-                  Record Short Video
-                </button>
-              </div>
-              <p className="mt-3 text-sm text-gray-600">
-                {mode === 'images'
-                  ? 'We will capture 5 images under slightly varied conditions for optimal recognition.'
-                  : 'Record a short face video (about 8 seconds). Make sure your face is well lit and centered.'}
-              </p>
+              <p className="mb-2">We will capture 5 images under slightly varied conditions for optimal recognition.</p>
+              <p className="mt-3 text-sm text-gray-600">Ensure your face is well lit and centered. When ready, start the capture process.</p>
             </div>
           </div>
         </div>
@@ -416,95 +247,83 @@ export default function BiometricEnrollmentModal({
       {step === 2 && (
         <div className="mt-6">
           <div className="mx-auto w-full max-w-md">
-            {mode === 'images' ? (
-              <>
-                <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-gray-100">
-                  <div className="h-full w-full">
-                    <CameraCapture
-                      ref={cameraRef}
-                      onCapture={handleCapture}
-                      allowRetake={false}
-                      showControls={true}
-                      hideConfirmOnCapture={true}
-                    />
-                  </div>
-                </div>
-                <p className="mt-2 text-center text-sm text-gray-500">
-                  Camera feed appears above. Position face in the center and tap
-                  Capture.
-                </p>
-
-                <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                  <div
-                    className="h-2 bg-black"
-                    style={{ width: `${progressPct}%` }}
+            <>
+              <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-gray-100">
+                <div className="h-full w-full">
+                  <CameraCapture
+                    ref={cameraRef}
+                    onCapture={handleCapture}
+                    allowRetake={false}
+                    showControls={true}
+                    hideConfirmOnCapture={true}
                   />
                 </div>
-                <p className="mt-2 text-center text-sm">
-                  Images captured: {images.length} / {MAX_IMAGES}
-                </p>
+              </div>
+              <p className="mt-2 text-center text-sm text-gray-500">
+                Camera feed appears above. Position face in the center and tap
+                Capture.
+              </p>
 
-                {images.length > 0 && (
-                  <div className="mt-4 grid grid-cols-5 gap-2">
-                    {images.map((src, idx) => (
-                      <div key={idx} className="relative">
-                        <img
-                          src={src}
-                          alt={`capture-${idx + 1}`}
-                          className="h-20 w-full rounded border object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setImages((prev) =>
-                              prev.filter((_, i) => i !== idx)
-                            )
-                          }
-                          className="absolute -right-2 -top-2 rounded-full bg-white p-1 shadow"
-                          aria-label="Remove image"
+              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-2 bg-black"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              <p className="mt-2 text-center text-sm">
+                Images captured: {images.length} / {MAX_IMAGES}
+              </p>
+
+              {images.length > 0 && (
+                <div className="mt-4 grid grid-cols-5 gap-2">
+                  {images.map((src, idx) => (
+                    <div key={idx} className="relative">
+                      <img
+                        src={src}
+                        alt={`capture-${idx + 1}`}
+                        className="h-20 w-full rounded border object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setImages((prev) =>
+                            prev.filter((_, i) => i !== idx)
+                          )
+                        }
+                        className="absolute -right-2 -top-2 rounded-full bg-white p-1 shadow"
+                        aria-label="Remove image"
+                      >
+                        <svg
+                          className="h-4 w-4 text-gray-700"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            className="h-4 w-4 text-gray-700"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M6 18L18 6M6 6l12 12"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                {images.length < MAX_IMAGES && (
-                  <div className="mt-4 text-center">
-                    <button
-                      type="button"
-                      onClick={() => cameraRef.current?.capture?.()}
-                      className="rounded-md bg-black px-4 py-2 text-white hover:bg-gray-900"
-                    >
-                      Capture Next Image
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <VideoRecorder onRecorded={(blob) => setVideoBlob(blob)} />
-                {videoBlob && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    Video ready to upload ({Math.round(videoBlob.size / 1024)}{' '}
-                    KB)
-                  </p>
-                )}
-              </>
-            )}
+              {images.length < MAX_IMAGES && (
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => cameraRef.current?.capture?.()}
+                    className="rounded-md bg-black px-4 py-2 text-white hover:bg-gray-900"
+                  >
+                    Capture Next Image
+                  </button>
+                </div>
+              )}
+            </>
           </div>
         </div>
       )}
