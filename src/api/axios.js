@@ -10,7 +10,6 @@ const axiosInstance = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true',
   },
 });
 
@@ -291,7 +290,8 @@ export const authApi = {
    * @param {string} token - Token to verify
    * @returns {Promise} Response
    */
-  verifyToken: (token) => axiosInstance.post('/auth/token/verify/', { token }),
+  // Backend endpoints are namespaced under /api
+  verifyToken: (token) => axiosInstance.post('/api/auth/token/verify/', { token }),
 
   /**
    * Request password reset
