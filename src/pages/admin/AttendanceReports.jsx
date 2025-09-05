@@ -406,7 +406,7 @@ const AttendanceReports = () => {
 
       {/* Filters */}
       <div className="rounded-lg bg-white shadow">
-        <div className="p-6">
+        <div className="p-3 md:p-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {/* Date Range */}
             <div>
@@ -496,7 +496,7 @@ const AttendanceReports = () => {
       {reportType === 'summary' && statsData?.data && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <div className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="p-5">
+            <div className="p-3 md:p-5">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
                   <AcademicCapIcon className="h-6 w-6 text-green-400" />
@@ -519,7 +519,7 @@ const AttendanceReports = () => {
           </div>
 
           <div className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="p-5">
+            <div className="p-3 md:p-5">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
                   <ClockIcon className="h-6 w-6 text-yellow-400" />
@@ -544,7 +544,7 @@ const AttendanceReports = () => {
           </div>
 
           <div className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="p-5">
+            <div className="p-3 md:p-5">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-400">
@@ -571,7 +571,7 @@ const AttendanceReports = () => {
           </div>
 
           <div className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="p-5">
+            <div className="p-3 md:p-5">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-400">

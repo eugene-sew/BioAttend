@@ -128,7 +128,7 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
         });
       }
     },
-    [queryClient, scheduleId, date]
+    [queryClient, scheduleId, date, handleManualClockIn]
   );
 
   // Subscribe to Pusher notifications
@@ -192,11 +192,11 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
     );
   };
 
-  const handleManualClockIn = (studentId, studentName) => {
+  const handleManualClockIn = useCallback((studentId, studentName) => {
     if (window.confirm(`Clock in ${studentName} manually?`)) {
       manualClockInMutation.mutate({ studentId });
     }
-  };
+  }, [manualClockInMutation]);
 
   if (isLoading) {
     return (
@@ -219,9 +219,9 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
   }
 
   return (
-    <div className="mx-4 rounded-lg bg-white shadow md:mx-0">
+    <div className="rounded-lg bg-white shadow">
       {/* Header with metrics */}
-      <div className="border-b border-gray-200 px-4 py-4 md:px-6">
+      <div className="border-b border-gray-200 px-3 py-4 md:px-6">
         <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
           <div>
             <h3 className="text-lg font-medium text-gray-900">
@@ -250,7 +250,7 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
       </div>
 
       {/* Filters */}
-      <div className="border-b border-gray-200 bg-gray-50 px-4 py-4 md:px-6">
+      <div className="border-b border-gray-200 bg-gray-50 px-3 py-4 md:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="flex-1">
             <input
@@ -357,7 +357,7 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
         {filteredRecords.map((record, index) => (
           <div
             key={record.student_id || index}
-            className="p-4 hover:bg-gray-50"
+            className="p-3 hover:bg-gray-50"
           >
             <div className="flex items-start space-x-3">
               <div className="h-10 w-10 flex-shrink-0">

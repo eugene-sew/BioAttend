@@ -182,7 +182,7 @@ const Enrollments = () => {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
+          <div className="p-3 md:p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <UserPlusIcon className="h-6 w-6 text-gray-400" />
@@ -202,7 +202,7 @@ const Enrollments = () => {
         </div>
 
         <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
+          <div className="p-3 md:p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <CheckCircleIcon className="h-6 w-6 text-green-400" />
@@ -222,7 +222,7 @@ const Enrollments = () => {
         </div>
 
         <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
+          <div className="p-3 md:p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="h-6 w-6 bg-blue-400 rounded-full flex items-center justify-center">
@@ -244,7 +244,7 @@ const Enrollments = () => {
         </div>
 
         <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
+          <div className="p-3 md:p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="h-6 w-6 bg-purple-400 rounded-full flex items-center justify-center">
@@ -268,7 +268,7 @@ const Enrollments = () => {
 
       {/* Search and Filters */}
       <div className="bg-white shadow rounded-lg">
-        <div className="p-6">
+        <div className="p-3 md:p-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -294,7 +294,8 @@ const Enrollments = () => {
           <h3 className="text-lg font-medium text-gray-900">Students</h3>
         </div>
         
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -392,17 +393,97 @@ const Enrollments = () => {
               })}
             </tbody>
           </table>
-          
-          {filteredStudents.length === 0 && (
-            <div className="text-center py-12">
-              <UserPlusIcon className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No students found</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {searchTerm ? 'Try adjusting your search terms.' : 'No students available.'}
-              </p>
-            </div>
-          )}
         </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {filteredStudents.map((student) => {
+            const enrollmentStatus = getEnrollmentStatus(student);
+            
+            return (
+              <div key={student.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                <div className="flex items-start space-x-3">
+                  <div className="h-12 w-12 flex-shrink-0">
+                    <div className="h-12 w-12 rounded-full bg-indigo-500 flex items-center justify-center">
+                      <span className="text-sm font-medium text-white">
+                        {student.first_name?.[0]}{student.last_name?.[0]}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {student.first_name} {student.last_name}
+                        </p>
+                        <p className="text-sm text-gray-500 truncate">
+                          {student.email}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end space-y-1">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          student.is_active 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {student.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                        <StatusBadge status={enrollmentStatus} />
+                      </div>
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Student ID:</span>
+                        <span className="text-gray-900">{student.student_profile?.student_id || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Group:</span>
+                        <span className="text-gray-900">{student.student_profile?.group?.name || 'No Group'}</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex space-x-2">
+                      <button
+                        onClick={() => handleEnrollStudent(student)}
+                        className="flex-1 inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200"
+                        title="Enroll Student"
+                      >
+                        <UserPlusIcon className="h-4 w-4 mr-1" />
+                        Enroll
+                      </button>
+                      <button
+                        className="flex-1 inline-flex items-center justify-center rounded-md border border-transparent bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                        title="View Details"
+                      >
+                        <EyeIcon className="h-4 w-4 mr-1" />
+                        View
+                      </button>
+                      {enrollmentStatus === 'enrolled' && (
+                        <button
+                          onClick={() => handleDeleteEnrollment(student.student_profile?.student_id)}
+                          className="flex-1 inline-flex items-center justify-center rounded-md border border-transparent bg-red-100 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-200"
+                          title="Delete Enrollment"
+                        >
+                          <TrashIcon className="h-4 w-4 mr-1" />
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        {filteredStudents.length === 0 && (
+          <div className="text-center py-12">
+            <UserPlusIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No students found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {searchTerm ? 'Try adjusting your search terms.' : 'No students available.'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Enrollment Modal */}

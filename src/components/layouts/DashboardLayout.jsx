@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import BottomNavBar from './BottomNavBar';
+import QuickClockInButton from '../common/QuickClockInButton';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 
@@ -25,12 +26,12 @@ const DashboardLayout = ({ navigationItems = [], title = 'Dashboard' }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="h-screen bg-gray-50 flex flex-col md:flex-row overflow-hidden">
       {/* Sidebar */}
       <aside 
         className={`hidden md:flex ${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } bg-white shadow-lg transition-all duration-300 ease-in-out`}
+        } bg-white shadow-lg transition-all duration-300 ease-in-out flex-shrink-0`}
       >
         <div className="flex flex-col h-full">
           {/* Logo/Header */}
@@ -128,16 +129,17 @@ const DashboardLayout = ({ navigationItems = [], title = 'Dashboard' }) => {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Top Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="px-6 py-4">
-            <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Top Header - Sticky */}
+        <header className="sticky top-0 z-40 bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
+          <div className="px-3 py-4 md:px-6 flex items-center justify-between">
+            <h1 className="text-xl md:text-2xl font-semibold text-gray-900">{title}</h1>
+            <QuickClockInButton />
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 p-6 pb-20 md:pb-6">
+        {/* Page Content - Scrollable */}
+        <main className="flex-1 overflow-y-auto p-3 pb-20 md:p-6 md:pb-6">
           <Outlet />
         </main>
       </div>

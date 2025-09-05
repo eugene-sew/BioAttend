@@ -63,7 +63,7 @@ const AdminDashboard = () => {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="bg-white shadow rounded-lg p-6">
+      <div className="bg-white shadow rounded-lg p-3 md:p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">
           Welcome to Admin Dashboard
         </h2>
@@ -74,7 +74,7 @@ const AdminDashboard = () => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-3 md:p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
               <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,7 +95,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-3 md:p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
               <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,7 +116,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-3 md:p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0 bg-yellow-500 rounded-md p-3">
               <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,7 +137,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-3 md:p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
               <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,7 +162,7 @@ const AdminDashboard = () => {
       {/* Quick Actions and Recent Activity Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Quick Actions */}
-        <div className="bg-white shadow rounded-lg p-6">
+        <div className="bg-white shadow rounded-lg p-3 md:p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Link 
@@ -211,7 +211,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Recent Activity Feed */}
-        <div className="bg-white shadow rounded-lg p-6">
+        <div className="bg-white shadow rounded-lg p-3 md:p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
           <div className="flow-root">
             <ul className="-mb-8">
@@ -284,7 +284,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* System Health Status */}
-      <div className="bg-white shadow rounded-lg p-6">
+      <div className="bg-white shadow rounded-lg p-3 md:p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">System Status</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex items-center space-x-3">
