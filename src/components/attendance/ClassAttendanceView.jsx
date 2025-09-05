@@ -50,36 +50,40 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
       if (data.type === 'manual_clock_in_request') {
         const message = `${data.student_name} is requesting manual clock-in`;
         const reason = data.reason ? ` (Reason: ${data.reason})` : '';
-        
-        toast((t) => (
-          <div className="flex flex-col space-y-2">
-            <div className="font-medium">Manual Clock-in Request</div>
-            <div className="text-sm text-gray-600">
-              {message}{reason}
+
+        toast(
+          (t) => (
+            <div className="flex flex-col space-y-2">
+              <div className="font-medium">Manual Clock-in Request</div>
+              <div className="text-sm text-gray-600">
+                {message}
+                {reason}
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => {
+                    handleManualClockIn(data.student_id, data.student_name);
+                    toast.dismiss(t.id);
+                  }}
+                  className="rounded bg-green-500 px-3 py-1 text-xs text-white hover:bg-green-600"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => toast.dismiss(t.id)}
+                  className="rounded bg-gray-500 px-3 py-1 text-xs text-white hover:bg-gray-600"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => {
-                  handleManualClockIn(data.student_id, data.student_name);
-                  toast.dismiss(t.id);
-                }}
-                className="rounded bg-green-500 px-3 py-1 text-xs text-white hover:bg-green-600"
-              >
-                Approve
-              </button>
-              <button
-                onClick={() => toast.dismiss(t.id)}
-                className="rounded bg-gray-500 px-3 py-1 text-xs text-white hover:bg-gray-600"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        ), {
-          duration: 10000,
-          icon: '🙋‍♂️',
-        });
-        
+          ),
+          {
+            duration: 10000,
+            icon: '🙋‍♂️',
+          }
+        );
+
         return; // Don't process further for manual requests
       }
 
@@ -215,10 +219,10 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
   }
 
   return (
-    <div className="rounded-lg bg-white shadow mx-4 md:mx-0">
+    <div className="mx-4 rounded-lg bg-white shadow md:mx-0">
       {/* Header with metrics */}
-      <div className="border-b border-gray-200 px-4 md:px-6 py-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+      <div className="border-b border-gray-200 px-4 py-4 md:px-6">
+        <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
           <div>
             <h3 className="text-lg font-medium text-gray-900">
               {scheduleTitle || schedule.title}
@@ -227,7 +231,7 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
               {schedule.start_time} - {schedule.end_time} • {schedule.date}
             </p>
           </div>
-          <div className="grid grid-cols-2 lg:flex lg:items-center gap-2 lg:gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-2 text-sm lg:flex lg:items-center lg:gap-4">
             <span className="flex items-center text-green-600">
               <CheckCircleIcon className="mr-1 h-4 w-4 flex-shrink-0" />
               Present: {stats.present}
@@ -246,8 +250,8 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
       </div>
 
       {/* Filters */}
-      <div className="border-b border-gray-200 bg-gray-50 px-4 md:px-6 py-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="border-b border-gray-200 bg-gray-50 px-4 py-4 md:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="flex-1">
             <input
               type="text"
@@ -261,7 +265,7 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:w-auto sm:text-sm"
             >
               <option value="all">All Status</option>
               <option value="PRESENT">Present</option>
@@ -273,7 +277,7 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto">
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -349,9 +353,12 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
       </div>
 
       {/* Mobile Card View */}
-      <div className="md:hidden divide-y divide-gray-200">
+      <div className="divide-y divide-gray-200 md:hidden">
         {filteredRecords.map((record, index) => (
-          <div key={record.student_id || index} className="p-4 hover:bg-gray-50">
+          <div
+            key={record.student_id || index}
+            className="p-4 hover:bg-gray-50"
+          >
             <div className="flex items-start space-x-3">
               <div className="h-10 w-10 flex-shrink-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
@@ -360,10 +367,10 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
                   </span>
                 </div>
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="truncate text-sm font-medium text-gray-900">
                       {record.student_name || 'Unknown Student'}
                     </p>
                     <p className="text-sm text-gray-500">
@@ -398,7 +405,7 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
                         )
                       }
                       disabled={manualClockInMutation.isLoading}
-                      className="w-full inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center rounded-md border border-transparent bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
                     >
                       <ClockIcon className="mr-2 h-4 w-4" />
                       Clock In Manually
@@ -411,20 +418,19 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
         ))}
       </div>
 
-        {filteredRecords.length === 0 && (
-          <div className="py-12 text-center">
-            <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">
-              No attendance records
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {attendance.length === 0
-                ? 'No attendance data found for this class session.'
-                : 'No records match your current filters.'}
-            </p>
-          </div>
-        )}
-      </div>
+      {filteredRecords.length === 0 && (
+        <div className="py-12 text-center">
+          <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">
+            No attendance records
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            {attendance.length === 0
+              ? 'No attendance data found for this class session.'
+              : 'No records match your current filters.'}
+          </p>
+        </div>
+      )}
     </div>
   );
 };

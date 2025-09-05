@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 const CACHE_NAME = 'bioattend-v1';
 const urlsToCache = [
   '/',
@@ -5,32 +6,29 @@ const urlsToCache = [
   '/static/css/main.css',
   '/manifest.json',
   '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icons/icon-512x512.png',
 ];
 
 // Install event - cache resources
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('Opened cache');
+      return cache.addAll(urlsToCache);
+    })
   );
 });
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
+    caches.match(event.request).then((response) => {
+      // Return cached version or fetch from network
+      if (response) {
+        return response;
       }
-    )
+      return fetch(event.request);
+    })
   );
 });
 
@@ -66,25 +64,23 @@ self.addEventListener('push', (event) => {
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
-      primaryKey: 1
+      primaryKey: 1,
     },
     actions: [
       {
         action: 'approve',
         title: 'Approve',
-        icon: '/icons/approve.png'
+        icon: '/icons/approve.png',
       },
       {
         action: 'dismiss',
         title: 'Dismiss',
-        icon: '/icons/dismiss.png'
-      }
-    ]
+        icon: '/icons/dismiss.png',
+      },
+    ],
   };
 
-  event.waitUntil(
-    self.registration.showNotification('BioAttend', options)
-  );
+  event.waitUntil(self.registration.showNotification('BioAttend', options));
 });
 
 // Handle notification clicks
@@ -93,17 +89,13 @@ self.addEventListener('notificationclick', (event) => {
 
   if (event.action === 'approve') {
     // Handle approve action
-    event.waitUntil(
-      clients.openWindow('/faculty/attendance')
-    );
+    event.waitUntil(clients.openWindow('/faculty/attendance'));
   } else if (event.action === 'dismiss') {
     // Handle dismiss action
     console.log('Notification dismissed');
   } else {
     // Handle default click
-    event.waitUntil(
-      clients.openWindow('/')
-    );
+    event.waitUntil(clients.openWindow('/'));
   }
 });
 
@@ -112,7 +104,7 @@ async function syncAttendanceData() {
   try {
     // Get offline attendance data from IndexedDB
     const offlineData = await getOfflineAttendanceData();
-    
+
     if (offlineData.length > 0) {
       // Send to server
       const response = await fetch('/api/attendance/sync', {
@@ -120,7 +112,7 @@ async function syncAttendanceData() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ attendanceData: offlineData })
+        body: JSON.stringify({ attendanceData: offlineData }),
       });
 
       if (response.ok) {
