@@ -46,7 +46,44 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
   // Real-time updates via Pusher
   const handleAttendanceUpdate = useCallback(
     (data) => {
-      // Update the query cache with new data
+      // Handle manual clock-in requests
+      if (data.type === 'manual_clock_in_request') {
+        const message = `${data.student_name} is requesting manual clock-in`;
+        const reason = data.reason ? ` (Reason: ${data.reason})` : '';
+        
+        toast((t) => (
+          <div className="flex flex-col space-y-2">
+            <div className="font-medium">Manual Clock-in Request</div>
+            <div className="text-sm text-gray-600">
+              {message}{reason}
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => {
+                  handleManualClockIn(data.student_id, data.student_name);
+                  toast.dismiss(t.id);
+                }}
+                className="rounded bg-green-500 px-3 py-1 text-xs text-white hover:bg-green-600"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => toast.dismiss(t.id)}
+                className="rounded bg-gray-500 px-3 py-1 text-xs text-white hover:bg-gray-600"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ), {
+          duration: 10000,
+          icon: '🙋‍♂️',
+        });
+        
+        return; // Don't process further for manual requests
+      }
+
+      // Update the query cache with new data for actual clock-ins
       queryClient.setQueryData(
         ['schedule-attendance', scheduleId, date],
         (oldData) => {
@@ -178,10 +215,10 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
   }
 
   return (
-    <div className="rounded-lg bg-white shadow">
+    <div className="rounded-lg bg-white shadow mx-4 md:mx-0">
       {/* Header with metrics */}
-      <div className="border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
+      <div className="border-b border-gray-200 px-4 md:px-6 py-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
           <div>
             <h3 className="text-lg font-medium text-gray-900">
               {scheduleTitle || schedule.title}
@@ -190,17 +227,17 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
               {schedule.start_time} - {schedule.end_time} • {schedule.date}
             </p>
           </div>
-          <div className="flex items-center space-x-4 text-sm">
+          <div className="grid grid-cols-2 lg:flex lg:items-center gap-2 lg:gap-4 text-sm">
             <span className="flex items-center text-green-600">
-              <CheckCircleIcon className="mr-1 h-4 w-4" />
+              <CheckCircleIcon className="mr-1 h-4 w-4 flex-shrink-0" />
               Present: {stats.present}
             </span>
             <span className="flex items-center text-yellow-600">
-              <ExclamationTriangleIcon className="mr-1 h-4 w-4" />
+              <ExclamationTriangleIcon className="mr-1 h-4 w-4 flex-shrink-0" />
               Late: {stats.late}
             </span>
             <span className="flex items-center text-red-600">
-              <XCircleIcon className="mr-1 h-4 w-4" />
+              <XCircleIcon className="mr-1 h-4 w-4 flex-shrink-0" />
               Absent: {stats.absent}
             </span>
             <span className="text-gray-600">Total: {stats.total}</span>
@@ -209,8 +246,8 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
       </div>
 
       {/* Filters */}
-      <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
-        <div className="flex items-center space-x-4">
+      <div className="border-b border-gray-200 bg-gray-50 px-4 md:px-6 py-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex-1">
             <input
               type="text"
@@ -220,11 +257,11 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-          <div>
+          <div className="sm:w-auto">
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             >
               <option value="all">All Status</option>
               <option value="PRESENT">Present</option>
@@ -235,8 +272,8 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
         </div>
       </div>
 
-      {/* Attendance table */}
-      <div className="overflow-x-auto">
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -309,6 +346,70 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden divide-y divide-gray-200">
+        {filteredRecords.map((record, index) => (
+          <div key={record.student_id || index} className="p-4 hover:bg-gray-50">
+            <div className="flex items-start space-x-3">
+              <div className="h-10 w-10 flex-shrink-0">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
+                  <span className="text-sm font-medium text-white">
+                    {record.student_name?.[0] || 'S'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {record.student_name || 'Unknown Student'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      ID: {record.student_id || 'N/A'}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0">
+                    {getStatusBadge(record.status)}
+                  </div>
+                </div>
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Check In:</span>
+                    <span className="text-gray-900">
+                      {record.check_in_time || 'Not clocked in'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Method:</span>
+                    <span className="text-gray-900">
+                      {record.is_manual_override ? 'Manual' : 'Automatic'}
+                    </span>
+                  </div>
+                </div>
+                {record.status === 'ABSENT' && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() =>
+                        handleManualClockIn(
+                          record.student_id,
+                          record.student_name
+                        )
+                      }
+                      disabled={manualClockInMutation.isLoading}
+                      className="w-full inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+                    >
+                      <ClockIcon className="mr-2 h-4 w-4" />
+                      Clock In Manually
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
 
         {filteredRecords.length === 0 && (
           <div className="py-12 text-center">

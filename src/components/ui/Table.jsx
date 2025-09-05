@@ -1,7 +1,15 @@
 import { cn } from '../../utils/cn';
 
-// Main Table container
-export const Table = ({ children, className, responsive = true, ...props }) => {
+// Main Table container with mobile card view
+export const Table = ({ 
+  children, 
+  className, 
+  responsive = true, 
+  mobileCardView = false,
+  cardRenderer,
+  data = [],
+  ...props 
+}) => {
   const table = (
     <table
       className={cn(
@@ -16,8 +24,21 @@ export const Table = ({ children, className, responsive = true, ...props }) => {
 
   if (responsive) {
     return (
-      <div className="w-full overflow-x-auto shadow-md rounded-lg">
-        {table}
+      <div className="w-full">
+        {/* Desktop Table View */}
+        <div className={cn(
+          "overflow-x-auto shadow-md rounded-lg",
+          mobileCardView && "hidden md:block"
+        )}>
+          {table}
+        </div>
+        
+        {/* Mobile Card View */}
+        {mobileCardView && cardRenderer && (
+          <div className="md:hidden space-y-3">
+            {data.map((item, index) => cardRenderer(item, index))}
+          </div>
+        )}
       </div>
     );
   }

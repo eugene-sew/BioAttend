@@ -375,7 +375,7 @@ export const attendanceApi = {
    * @returns {Promise} Response
    */
   requestManualCheck: (data) =>
-    axiosInstance.post('/api/attendance/manual-request/', data),
+    axiosInstance.post('/api/attendance/manual_clock_in_request/', data),
 
   /**
    * Get attendance records for a specific schedule (Faculty)

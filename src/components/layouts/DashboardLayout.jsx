@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import BottomNavBar from './BottomNavBar';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 
@@ -24,10 +25,10 @@ const DashboardLayout = ({ navigationItems = [], title = 'Dashboard' }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
       {/* Sidebar */}
       <aside 
-        className={`${
+        className={`hidden md:flex ${
           isSidebarOpen ? 'w-64' : 'w-20'
         } bg-white shadow-lg transition-all duration-300 ease-in-out`}
       >
@@ -136,10 +137,11 @@ const DashboardLayout = ({ navigationItems = [], title = 'Dashboard' }) => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 pb-20 md:pb-6">
           <Outlet />
         </main>
       </div>
+      <BottomNavBar navigationItems={navigationItems} />
     </div>
   );
 };

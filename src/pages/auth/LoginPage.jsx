@@ -58,7 +58,7 @@ const LoginPage = () => {
         <div className="mx-auto w-full max-w-sm lg:w-96">
           <div>
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-2xl font-bold text-blue-600">
-              R
+              Bio.AT
             </div>
             <h2 className="mt-6 text-3xl font-bold tracking-tight text-gray-900">
               Welcome back!

@@ -291,16 +291,16 @@ const UserManagement = () => {
   const totalPages = Math.ceil((usersData?.count || 0) / itemsPerPage);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       {/* Header */}
-      <div className="rounded-lg bg-white p-6 shadow">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
+      <div className="rounded-lg bg-white p-4 md:p-6 shadow">
+        <div className="mb-4 md:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-900">User Management</h2>
           <button
             onClick={() => openModal()}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700"
+            className="rounded-md bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700 w-full sm:w-auto"
           >
-            <span className="flex items-center">
+            <span className="flex items-center justify-center">
               <svg
                 className="mr-2 h-5 w-5"
                 fill="none"
@@ -320,7 +320,7 @@ const UserManagement = () => {
         </div>
 
         {/* Search and Filter */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row">
+        <div className="mb-4 md:mb-6 flex flex-col gap-4 sm:flex-row">
           <div className="flex-1">
             <input
               type="text"
@@ -344,7 +344,7 @@ const UserManagement = () => {
           </div>
         </div>
 
-        {/* Users Table */}
+        {/* Users Table/Cards */}
         {isLoading ? (
           <div className="py-12 text-center">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-indigo-600"></div>
@@ -355,7 +355,8 @@ const UserManagement = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -448,43 +449,128 @@ const UserManagement = () => {
               </table>
             </div>
 
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+              {users.map((user) => (
+                <div key={user.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-start space-x-3">
+                    <div className="h-12 w-12 flex-shrink-0">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500">
+                        <span className="font-medium text-white">
+                          {user.first_name?.[0]}
+                          {user.last_name?.[0]}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {user.first_name} {user.last_name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {user.student_id || user.faculty_id || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end space-y-1">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                              user.role === 'ADMIN'
+                                ? 'bg-purple-100 text-purple-800'
+                                : user.role === 'FACULTY'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-green-100 text-green-800'
+                            }`}
+                          >
+                            {user.role}
+                          </span>
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                          >
+                            {user.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Email:</span>
+                          <span className="text-gray-900 truncate ml-2">{user.email}</span>
+                        </div>
+                        {user.department && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Department:</span>
+                            <span className="text-gray-900">{user.department}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-3 flex space-x-2">
+                        <button
+                          onClick={() => openModal(user)}
+                          className="flex-1 inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user.id)}
+                          className="flex-1 inline-flex items-center justify-center rounded-md border border-transparent bg-red-100 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between">
-                <div className="text-sm text-gray-700">
+              <div className="mt-4 md:mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                <div className="text-sm text-gray-700 text-center sm:text-left">
                   Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
                   {Math.min(currentPage * itemsPerPage, usersData?.count || 0)}{' '}
                   of {usersData?.count || 0} users
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-center sm:justify-end">
                   <button
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.max(1, prev - 1))
-                    }
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-md border border-gray-300 bg-white px-3 md:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Previous
                   </button>
-                  {[...Array(totalPages)].map((_, i) => (
-                    <button
-                      key={i + 1}
-                      onClick={() => setCurrentPage(i + 1)}
-                      className={`rounded-md border px-3 py-1 ${
-                        currentPage === i + 1
-                          ? 'border-indigo-600 bg-indigo-600 text-white'
-                          : 'border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(
+                      (page) =>
+                        page === 1 ||
+                        page === totalPages ||
+                        Math.abs(page - currentPage) <= 1,
+                    )
+                    .map((page, index, array) => (
+                      <React.Fragment key={page}>
+                        {index > 0 && array[index - 1] !== page - 1 && (
+                          <span className="px-2 py-2 text-sm text-gray-500 hidden sm:inline">
+                            ...
+                          </span>
+                        )}
+                        <button
+                          onClick={() => setCurrentPage(page)}
+                          className={`rounded-md px-3 md:px-4 py-2 text-sm font-medium ${
+                            currentPage === page
+                              ? 'bg-indigo-600 text-white'
+                              : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    ))}
                   <button
                     onClick={() =>
-                      setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
                     }
                     disabled={currentPage === totalPages}
-                    className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-md border border-gray-300 bg-white px-3 md:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Next
                   </button>
@@ -495,37 +581,42 @@ const UserManagement = () => {
         )}
       </div>
 
-      {/* Add/Edit User Modal */}
+      {/* User Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-75 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white">
-            <div className="p-6">
-              <div className="mb-6 flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {editingUser ? 'Edit User' : 'Add New User'}
-                </h3>
-                <button
-                  onClick={closeModal}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <svg
-                    className="h-6 w-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+            <span className="hidden sm:inline-block sm:h-screen sm:align-middle">
+              &#8203;
+            </span>
+            <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 w-full max-w-lg sm:align-middle">
               <form onSubmit={handleSubmit}>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">
+                      {editingUser ? 'Edit User' : 'Add New User'}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={closeModal}
+                      className="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <svg
+                        className="h-6 w-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">
                       First Name
@@ -659,46 +750,40 @@ const UserManagement = () => {
                     </>
                   )}
 
-                  <div className="md:col-span-2">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        name="is_active"
-                        checked={formData.is_active}
-                        onChange={handleInputChange}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">
-                        Active User
-                      </span>
-                    </label>
+                    <div className="sm:col-span-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          name="is_active"
+                          checked={formData.is_active}
+                          onChange={handleInputChange}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">
+                          Active User
+                        </span>
+                      </label>
+                    </div>
                   </div>
+
+                  {!editingUser && (
+                    <div className="mt-4 rounded-md bg-yellow-50 p-3">
+                      <p className="text-sm text-yellow-800">
+                        A temporary password will be set for the new user. They
+                        will be required to change it on first login.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {!editingUser && (
-                  <div className="mt-4 rounded-md bg-yellow-50 p-3">
-                    <p className="text-sm text-yellow-800">
-                      A temporary password will be set for the new user. They
-                      will be required to change it on first login.
-                    </p>
-                  </div>
-                )}
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
+                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
                   <button
                     type="submit"
                     disabled={
                       createUserMutation.isLoading ||
                       updateUserMutation.isLoading
                     }
-                    className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50"
+                    className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 sm:ml-3 sm:w-auto"
                   >
                     {createUserMutation.isLoading ||
                     updateUserMutation.isLoading
@@ -706,6 +791,13 @@ const UserManagement = () => {
                       : editingUser
                         ? 'Update User'
                         : 'Create User'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                  >
+                    Cancel
                   </button>
                 </div>
               </form>
