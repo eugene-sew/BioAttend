@@ -24,6 +24,7 @@ const FacultyDashboardLayout = () => {
     {
       path: '/faculty/courses',
       label: 'My Courses',
+      mobile: 'Courses',
       icon: (
         <svg
           className="h-5 w-5"
@@ -43,6 +44,7 @@ const FacultyDashboardLayout = () => {
     {
       path: '/faculty/attendance',
       label: 'Take Attendance',
+      mobile: 'Attendance',
       icon: (
         <svg
           className="h-5 w-5"
@@ -62,6 +64,7 @@ const FacultyDashboardLayout = () => {
     {
       path: '/faculty/reports',
       label: 'Attendance Reports',
+      mobile: 'Reports',
       icon: (
         <svg
           className="h-5 w-5"
@@ -81,6 +84,7 @@ const FacultyDashboardLayout = () => {
     {
       path: '/faculty/students',
       label: 'Student List',
+      mobile: 'Students',
       icon: (
         <svg
           className="h-5 w-5"
@@ -100,6 +104,7 @@ const FacultyDashboardLayout = () => {
     {
       path: '/faculty/schedules',
       label: 'Class Schedule',
+      mobile: 'Schedule',
       icon: (
         <svg
           className="h-5 w-5"
@@ -119,6 +124,7 @@ const FacultyDashboardLayout = () => {
     {
       path: '/faculty/profile',
       label: 'My Profile',
+      mobile: 'Profile',
       icon: (
         <svg
           className="h-5 w-5"

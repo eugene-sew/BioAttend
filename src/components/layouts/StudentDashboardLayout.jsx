@@ -34,6 +34,7 @@ const StudentDashboardLayout = () => {
     {
       path: '/student/attendance',
       label: 'My Attendance',
+      mobile: 'Attendance',
       icon: (
         <svg
           className="h-5 w-5"
@@ -53,6 +54,7 @@ const StudentDashboardLayout = () => {
     {
       path: '/student/attendance/clock',
       label: 'Clock In/Out',
+      mobile: 'Clock',
       icon: (
         <svg
           className="h-5 w-5"
@@ -72,6 +74,7 @@ const StudentDashboardLayout = () => {
     {
       path: '/student/schedule',
       label: 'Class Schedule',
+      mobile: 'Schedule',
       icon: (
         <svg
           className="h-5 w-5"
@@ -91,6 +94,7 @@ const StudentDashboardLayout = () => {
     {
       path: '/student/biometric',
       label: 'Biometric Status',
+      mobile: 'Biometric',
       icon: (
         <svg
           className="h-5 w-5"
@@ -110,6 +114,7 @@ const StudentDashboardLayout = () => {
     {
       path: '/student/profile',
       label: 'My Profile',
+      mobile: 'Profile',
       icon: (
         <svg
           className="h-5 w-5"
