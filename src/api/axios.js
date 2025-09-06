@@ -813,6 +813,46 @@ export const groupsApi = {
   delete: (id) => axiosInstance.delete(`/api/students/groups/${id}/`),
 };
 
+/**
+ * Activity API endpoints
+ */
+export const activityApi = {
+  /**
+   * Get recent activities (admin only)
+   */
+  getRecentActivities: (params = {}) =>
+    axiosInstance.get('/api/activities/', { params }).then((r) => r.data),
+  
+  /**
+   * Get activity statistics (admin only)
+   */
+  getActivityStats: (params = {}) =>
+    axiosInstance.get('/api/activities/stats/', { params }).then((r) => r.data),
+  
+  /**
+   * Log custom activity
+   */
+  logCustomActivity: (data) =>
+    axiosInstance.post('/api/activities/log/', data).then((r) => r.data)
+};
+
+/**
+ * Health Check API
+ */
+export const healthApi = {
+  /**
+   * Get system health
+   */
+  getSystemHealth: () =>
+    axiosInstance.get('/api/health/').then((r) => r.data),
+  
+  /**
+   * Get quick health
+   */
+  getQuickHealth: () =>
+    axiosInstance.get('/api/health/quick/').then((r) => r.data)
+};
+
 // Student self-report convenience wrappers (placed after all API objects)
 attendanceApi.getStudentAttendance = async (params = {}) => {
   const profileRes = await userApi.getProfile();

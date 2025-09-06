@@ -1,15 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { userApi, attendanceApi, scheduleApi } from '../../api/axios';
+import { activityApi, healthApi, userApi, attendanceApi, scheduleApi } from '../../api/axios';
 import { Link } from 'react-router-dom';
 
 const AdminDashboard = () => {
   const [recentActivities, setRecentActivities] = useState([]);
+  const [systemHealth, setSystemHealth] = useState({
+    api_server: { status: 'loading', message: 'Checking...', details: {} },
+    database: { status: 'loading', message: 'Checking...', details: {} },
+    biometric_devices: { status: 'loading', message: 'Checking...', details: {} }
+  });
+
+  console.log('AdminDashboard component rendered');
+  console.log('System health state:', systemHealth);
 
   // Fetch total users
   const { data: usersData } = useQuery({
     queryKey: ['dashboard-users'],
-    queryFn: () => userApi.getUsers({ page_size: 1 })
+    queryFn: () => {
+      console.log('Calling userApi.getUsers');
+      return userApi.getUsers({ page_size: 1 });
+    }
   });
 
   // Fetch today's attendance statistics
@@ -29,31 +40,66 @@ const AdminDashboard = () => {
     queryFn: () => scheduleApi.getSchedules({ page_size: 1 })
   });
 
-  // Fetch recent attendance records for activity feed (limit to today to match backend expectations)
-  const { data: recentAttendance } = useQuery({
-    queryKey: ['dashboard-recent-activity', today],
-    queryFn: () => attendanceApi.getRecords({
-      from: today,
-      to: today,
-      page_size: 10,
-      ordering: '-created_at'
-    })
+  // Fetch recent activities from the new activity tracking API
+  const { data: recentActivitiesData, error: activitiesError, isLoading: activitiesLoading } = useQuery({
+    queryKey: ['dashboard-recent-activities'],
+    queryFn: () => {
+      console.log('Calling activityApi.getRecentActivities');
+      return activityApi.getRecentActivities({ limit: 10 });
+    },
+    retry: false,
+    onError: (error) => {
+      console.error('Activities API error:', error);
+      if (error.response?.status === 401) {
+        console.log('User not authenticated for activities');
+      }
+    }
   });
+
+  console.log('Activities query state:', { recentActivitiesData, activitiesError, activitiesLoading });
+
+  // Fetch system health data
+  const { data: healthData } = useQuery({
+    queryKey: ['dashboard-system-health'],
+    queryFn: () => {
+      console.log('Calling healthApi.getSystemHealth');
+      return healthApi.getSystemHealth();
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds
+    onSuccess: (data) => {
+      console.log('Health API success:', data);
+      if (data?.services) {
+        setSystemHealth(data.services);
+      }
+    },
+    onError: (error) => {
+      console.error('Health API error:', error);
+      setSystemHealth({
+        api_server: { status: 'critical', message: 'API server unreachable', details: {} },
+        database: { status: 'critical', message: 'Database connection failed', details: {} },
+        biometric_devices: { status: 'warning', message: 'Cannot check biometric status', details: {} }
+      });
+    }
+  });
+
+  // Always prefer freshest health data from the query, fallback to local state
+  const effectiveHealth = (healthData && healthData.services) ? healthData.services : systemHealth;
 
   // Format recent activities
   useEffect(() => {
-    if (recentAttendance?.results) {
-      const activities = recentAttendance.results.map(record => ({
-        id: record.id,
-        type: record.check_out_time ? 'check-out' : 'check-in',
-        user: `${record.user?.first_name} ${record.user?.last_name}`,
-        time: record.check_out_time || record.check_in_time,
-        status: record.status,
-        timestamp: record.created_at
+    if (recentActivitiesData?.results) {
+      const activities = recentActivitiesData.results.map(activity => ({
+        id: activity.id,
+        type: activity.action_type,
+        user: activity.user_name,
+        time: activity.time_ago,
+        status: activity.action_display,
+        timestamp: activity.created_at,
+        description: activity.description
       }));
       setRecentActivities(activities);
     }
-  }, [recentAttendance]);
+  }, [recentActivitiesData]);
 
   const totalUsers = usersData?.count || 0;
   const todayAttendance = attendanceStats?.average_attendance_rate || 0;
@@ -215,7 +261,11 @@ const AdminDashboard = () => {
           <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
           <div className="flow-root">
             <ul className="-mb-8">
-              {recentActivities.length > 0 ? (
+              {activitiesError?.response?.status === 401 ? (
+                <li className="text-center py-4 text-gray-500">
+                  Please log in as admin to view recent activities
+                </li>
+              ) : recentActivities.length > 0 ? (
                 recentActivities.slice(0, 5).map((activity, index) => (
                   <li key={activity.id}>
                     <div className="relative pb-8">
@@ -226,38 +276,23 @@ const AdminDashboard = () => {
                         />
                       )}
                       <div className="relative flex space-x-3">
-                        <div>
-                          <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white
-                            ${activity.type === 'check-in' ? 'bg-green-500' : 
-                              activity.type === 'check-out' ? 'bg-blue-500' : 
-                              'bg-gray-400'}`}
-                          >
-                            {activity.type === 'check-in' ? (
-                              <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            ) : (
-                              <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                              </svg>
-                            )}
+                        <div className="flex-shrink-0">
+                          <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-gray-500">
+                            <span className="text-xs font-medium leading-none text-white">
+                              {activity.user.charAt(0)}
+                            </span>
                           </span>
                         </div>
-                        <div className="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
-                          <div>
-                            <p className="text-sm text-gray-500">
-                              <span className="font-medium text-gray-900">{activity.user}</span>{' '}
-                              {activity.type === 'check-in' ? 'checked in' : 'checked out'} at{' '}
-                              <span className="font-medium">{activity.time}</span>
-                            </p>
-                          </div>
-                          <div className="text-right text-sm whitespace-nowrap text-gray-500">
-                            <time dateTime={activity.timestamp}>
-                              {new Date(activity.timestamp).toLocaleTimeString()}
-                            </time>
-                          </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {activity.user}
+                          </p>
+                          <p className="text-sm text-gray-500 truncate">
+                            {activity.description}
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0 text-sm text-gray-500">
+                          {activity.time}
                         </div>
                       </div>
                     </div>
@@ -265,7 +300,7 @@ const AdminDashboard = () => {
                 ))
               ) : (
                 <li className="text-center py-4 text-gray-500">
-                  No recent activity
+                  {activitiesError ? 'Error loading activities' : 'No recent activity'}
                 </li>
               )}
             </ul>
@@ -287,37 +322,87 @@ const AdminDashboard = () => {
       <div className="bg-white shadow rounded-lg p-3 md:p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">System Status</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* API Server Status */}
           <div className="flex items-center space-x-3">
             <div className="flex-shrink-0">
-              <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-green-100">
-                <span className="h-3 w-3 rounded-full bg-green-400"></span>
+              <span className={`inline-flex items-center justify-center h-10 w-10 rounded-full ${
+                effectiveHealth.api_server?.status === 'healthy' ? 'bg-green-100' :
+                effectiveHealth.api_server?.status === 'warning' ? 'bg-yellow-100' :
+                effectiveHealth.api_server?.status === 'critical' ? 'bg-red-100' : 'bg-gray-100'
+              }`}>
+                <span className={`h-3 w-3 rounded-full ${
+                  effectiveHealth.api_server?.status === 'healthy' ? 'bg-green-400' :
+                  effectiveHealth.api_server?.status === 'warning' ? 'bg-yellow-400' :
+                  effectiveHealth.api_server?.status === 'critical' ? 'bg-red-400' : 'bg-gray-400'
+                }`}></span>
               </span>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">API Server</p>
-              <p className="text-sm text-gray-500">Operational</p>
+              <p className="text-sm text-gray-500">
+                {effectiveHealth.api_server?.message || 'Checking...'}
+              </p>
+              {effectiveHealth.api_server?.details?.response_time_ms && (
+                <p className="text-xs text-gray-400">
+                  {effectiveHealth.api_server.details.response_time_ms}ms
+                </p>
+              )}
             </div>
           </div>
+
+          {/* Database Status */}
           <div className="flex items-center space-x-3">
             <div className="flex-shrink-0">
-              <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-green-100">
-                <span className="h-3 w-3 rounded-full bg-green-400"></span>
+              <span className={`inline-flex items-center justify-center h-10 w-10 rounded-full ${
+                effectiveHealth.database?.status === 'healthy' ? 'bg-green-100' :
+                effectiveHealth.database?.status === 'warning' ? 'bg-yellow-100' :
+                effectiveHealth.database?.status === 'critical' ? 'bg-red-100' : 'bg-gray-100'
+              }`}>
+                <span className={`h-3 w-3 rounded-full ${
+                  effectiveHealth.database?.status === 'healthy' ? 'bg-green-400' :
+                  effectiveHealth.database?.status === 'warning' ? 'bg-yellow-400' :
+                  effectiveHealth.database?.status === 'critical' ? 'bg-red-400' : 'bg-gray-400'
+                }`}></span>
               </span>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">Database</p>
-              <p className="text-sm text-gray-500">Connected</p>
+              <p className="text-sm text-gray-500">
+                {effectiveHealth.database?.message || 'Checking...'}
+              </p>
+              {effectiveHealth.database?.details?.query_time_ms && (
+                <p className="text-xs text-gray-400">
+                  {effectiveHealth.database.details.query_time_ms}ms
+                </p>
+              )}
             </div>
           </div>
+
+          {/* Biometric Devices Status */}
           <div className="flex items-center space-x-3">
             <div className="flex-shrink-0">
-              <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-green-100">
-                <span className="h-3 w-3 rounded-full bg-green-400"></span>
+              <span className={`inline-flex items-center justify-center h-10 w-10 rounded-full ${
+                effectiveHealth.biometric_devices?.status === 'healthy' ? 'bg-green-100' :
+                effectiveHealth.biometric_devices?.status === 'warning' ? 'bg-yellow-100' :
+                effectiveHealth.biometric_devices?.status === 'critical' ? 'bg-red-100' : 'bg-gray-100'
+              }`}>
+                <span className={`h-3 w-3 rounded-full ${
+                  effectiveHealth.biometric_devices?.status === 'healthy' ? 'bg-green-400' :
+                  effectiveHealth.biometric_devices?.status === 'warning' ? 'bg-yellow-400' :
+                  effectiveHealth.biometric_devices?.status === 'critical' ? 'bg-red-400' : 'bg-gray-400'
+                }`}></span>
               </span>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">Biometric Devices</p>
-              <p className="text-sm text-gray-500">All Online</p>
+              <p className="text-sm text-gray-500">
+                {effectiveHealth.biometric_devices?.message || 'Checking...'}
+              </p>
+              {effectiveHealth.biometric_devices?.details?.response_time_ms && (
+                <p className="text-xs text-gray-400">
+                  {effectiveHealth.biometric_devices.details.response_time_ms}ms
+                </p>
+              )}
             </div>
           </div>
         </div>
