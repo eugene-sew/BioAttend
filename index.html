@@ -29,22 +29,33 @@
   </head>
   <body>
     <div id="root"></div>
+    <div id="modal-root"></div>
     <script type="module" src="/src/main.jsx"></script>
 
-    <!-- Service Worker Registration -->
+    <!-- Service Worker Registration (disabled for localhost/127.0.0.1) -->
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker
-            .register('/sw.js')
-            .then((registration) => {
-              console.log('SW registered: ', registration);
-            })
-            .catch((registrationError) => {
-              console.log('SW registration failed: ', registrationError);
+      (function () {
+        var isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+        if ('serviceWorker' in navigator && !isLocal) {
+          window.addEventListener('load', function () {
+            navigator.serviceWorker
+              .register('/sw.js')
+              .then(function (registration) {
+                console.log('SW registered: ', registration);
+              })
+              .catch(function (registrationError) {
+                console.log('SW registration failed: ', registrationError);
+              });
+          });
+        } else if ('serviceWorker' in navigator && isLocal) {
+          // Ensure any previously registered SW is removed while developing locally
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (reg) {
+              reg.unregister();
             });
-        });
-      }
+          });
+        }
+      })();
     </script>
   </body>
 </html>

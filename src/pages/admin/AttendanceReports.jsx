@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { attendanceApi, groupsApi, facultyApi } from '../../api/axios';
 import useAuthStore from '../../store/authStore';
@@ -93,7 +93,8 @@ const AttendanceReports = () => {
     enabled: !!user && (user.role === 'STUDENT' || !!selectedGroup),
   });
 
-  // Fetch detailed attendance for students only (admin/faculty use aggregates instead)
+  // Fetch student records (for student role). We enable this for all modes so
+  // we can use it as a fallback to compute metrics if the stats object lacks counts.
   const { data: recordsData, isLoading: recordsLoading } = useQuery({
     queryKey: ['attendance-records', dateRange, user?.role],
     queryFn: async () => {
@@ -107,7 +108,7 @@ const AttendanceReports = () => {
       }
       return null;
     },
-    enabled: reportType === 'detailed' && !!user && user.role === 'STUDENT',
+    enabled: !!user && user.role === 'STUDENT',
   });
 
   const handleDateChange = (field, value) => {
@@ -116,6 +117,51 @@ const AttendanceReports = () => {
       [field]: value,
     }));
   };
+
+  // Derive student counts once from either stats (preferred) or records fallback
+  const studentDerived = useMemo(() => {
+    if (user?.role !== 'STUDENT') return null;
+    const s = statsData?.data || {};
+    // Handle both direct stats object and nested statistics
+    const stats = s.statistics || s;
+    const present = (stats.total_present ?? stats.present);
+    const late = (stats.total_late ?? stats.late);
+    const absent = (stats.total_absent ?? stats.absent);
+    const rate = (stats.attendance_rate ?? 0);
+
+    // If stats has all values, use them
+    if ([present, late, absent].every((v) => v != null)) {
+      return { present, late, absent, rate: Math.round(rate) };
+    }
+
+    // Fallback to records-based computation
+    const recs = recordsData?.data || [];
+    const fromRecords = {
+      present: recs.filter((r) => r.status === 'PRESENT').length,
+      late: recs.filter((r) => r.status === 'LATE').length,
+      absent: recs.filter((r) => r.status === 'ABSENT').length,
+      rate: Math.round(rate),
+    };
+    return fromRecords;
+  }, [user?.role, statsData, recordsData]);
+
+  // Debug logs (student only) to inspect data shapes driving metric cards
+  useEffect(() => {
+    if (user?.role === 'STUDENT') {
+      console.log('[Reports] statsData', statsData);
+      console.log('[Reports] statsData.data keys:', Object.keys(statsData?.data || {}));
+      console.log('[Reports] statsData.data', statsData?.data);
+      if (statsData?.data?.statistics) {
+        console.log('[Reports] statsData.data.statistics keys:', Object.keys(statsData.data.statistics));
+        console.log('[Reports] statsData.data.statistics', statsData.data.statistics);
+      }
+      console.log('[Reports] recordsData.data', recordsData?.data);
+      console.log('[Reports] studentDerived', studentDerived);
+      console.log('[Reports] dateRange', dateRange);
+      console.log('[Reports] statsLoading', statsLoading);
+      console.log('[Reports] recordsLoading', recordsLoading);
+    }
+  }, [user?.role, statsData, recordsData, studentDerived, dateRange, statsLoading, recordsLoading]);
 
   const exportToCSV = () => {
     try {
@@ -504,13 +550,12 @@ const AttendanceReports = () => {
                 <div className="ml-5 w-0 flex-1">
                   <dl>
                     <dt className="truncate text-sm font-medium text-gray-500">
-                      Total Present
+                      {user?.role === 'STUDENT' ? 'Days Present' : 'Total Present'}
                     </dt>
                     <dd className="text-lg font-medium text-gray-900">
                       {user?.role === 'STUDENT'
-                        ? statsData.data.total_present || 0
-                        : statsData.data.overall_statistics
-                            ?.total_attendance_records || 0}
+                        ? (studentDerived?.present ?? 0)
+                        : (statsData.data.overall_statistics?.total_attendance_records || 0)}
                     </dd>
                   </dl>
                 </div>
@@ -527,15 +572,12 @@ const AttendanceReports = () => {
                 <div className="ml-5 w-0 flex-1">
                   <dl>
                     <dt className="truncate text-sm font-medium text-gray-500">
-                      Total Late
+                      {user?.role === 'STUDENT' ? 'Late Arrivals' : 'Total Late'}
                     </dt>
                     <dd className="text-lg font-medium text-gray-900">
                       {user?.role === 'STUDENT'
-                        ? statsData.data.total_late || 0
-                        : (statsData.data.daily_attendance || []).reduce(
-                            (sum, d) => sum + (d.late_count || 0),
-                            0
-                          )}
+                        ? (studentDerived?.late ?? 0)
+                        : (statsData.data.daily_attendance || []).reduce((sum, d) => sum + (d.late_count || 0), 0)}
                     </dd>
                   </dl>
                 </div>
@@ -554,15 +596,12 @@ const AttendanceReports = () => {
                 <div className="ml-5 w-0 flex-1">
                   <dl>
                     <dt className="truncate text-sm font-medium text-gray-500">
-                      Total Absent
+                      {user?.role === 'STUDENT' ? 'Days Absent' : 'Total Absent'}
                     </dt>
                     <dd className="text-lg font-medium text-gray-900">
                       {user?.role === 'STUDENT'
-                        ? statsData.data.total_absent || 0
-                        : (statsData.data.daily_attendance || []).reduce(
-                            (sum, d) => sum + (d.absent_count || 0),
-                            0
-                          )}
+                        ? (studentDerived?.absent ?? 0)
+                        : (statsData.data.daily_attendance || []).reduce((sum, d) => sum + (d.absent_count || 0), 0)}
                     </dd>
                   </dl>
                 </div>
@@ -585,12 +624,8 @@ const AttendanceReports = () => {
                     </dt>
                     <dd className="text-lg font-medium text-gray-900">
                       {user?.role === 'STUDENT'
-                        ? Math.round(statsData.data.attendance_rate || 0)
-                        : Math.round(
-                            statsData.data.overall_statistics
-                              ?.average_attendance_rate || 0
-                          )}
-                      %
+                        ? (studentDerived?.rate ?? 0)
+                        : Math.round(statsData.data.overall_statistics?.average_attendance_rate || 0)}%
                     </dd>
                   </dl>
                 </div>

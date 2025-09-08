@@ -87,10 +87,15 @@ const Modal = ({
     if (isOpen) {
       // Store the previously focused element
       previousActiveElement.current = document.activeElement;
+      const originalOverflow = document.body.style.overflow;
+      const cleanupFns = [];
       
       // Add event listeners
       document.addEventListener('keydown', handleKeyDown);
+      cleanupFns.push(() => document.removeEventListener('keydown', handleKeyDown));
+
       document.body.style.overflow = 'hidden';
+      cleanupFns.push(() => { document.body.style.overflow = originalOverflow; });
       
       // Set initial focus
       setTimeout(() => {
@@ -114,14 +119,16 @@ const Modal = ({
       }, 100);
     } else {
       // Restore focus to the previously focused element
-      if (previousActiveElement.current) {
-        previousActiveElement.current.focus();
+      const el = previousActiveElement.current;
+      if (el && typeof el.focus === 'function' && el.isConnected) {
+        try { el.focus(); } catch (_) { /* noop */ }
       }
     }
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'unset';
+      // Safety: attempt to remove listener and restore overflow regardless of state
+      try { document.removeEventListener('keydown', handleKeyDown); } catch (_) {}
+      try { document.body.style.overflow = 'unset'; } catch (_) {}
     };
   }, [isOpen, handleKeyDown, getFocusableElements]);
 
@@ -203,7 +210,8 @@ const Modal = ({
     </div>
   );
 
-  return createPortal(modalContent, document.body);
+  const modalRoot = document.getElementById('modal-root') || document.body;
+  return createPortal(modalContent, modalRoot);
 };
 
 export default Modal;

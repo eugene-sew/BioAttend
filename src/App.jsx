@@ -1,7 +1,7 @@
 import { BrowserRouter as Router } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+// import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider } from './contexts/ThemeContext';
 import AppRoutes from './routes';
 import Toast from './components/ui/Toast';
@@ -54,11 +54,10 @@ function App() {
             {/* Global Modal component */}
             <GlobalModal />
 
-            <ErrorBoundary>
-              <AppRoutes />
-            </ErrorBoundary>
+            <AppRoutes />
           </Router>
-          <ReactQueryDevtools initialIsOpen={false} />
+          {/* Temporarily disabled ReactQueryDevtools to fix Object.assign error */}
+          {/* <ReactQueryDevtools initialIsOpen={false} /> */}
         </QueryClientProvider>
       </ThemeProvider>
     </ErrorBoundary>

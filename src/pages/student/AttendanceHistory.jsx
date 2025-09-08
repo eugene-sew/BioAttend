@@ -58,15 +58,23 @@ const AttendanceHistory = () => {
 
   // Extract statistics from report data
   const statsData = useMemo(() => {
-    if (!reportData?.statistics) return {};
+    if (!reportData?.statistics) {
+      console.log('[AttendanceHistory] No statistics in reportData:', reportData);
+      return {};
+    }
     
     const stats = reportData.statistics;
-    return {
-      total_present: stats.total_present || 0,
-      total_late: stats.total_late || 0,
-      total_absent: stats.total_absent || 0,
+    console.log('[AttendanceHistory] Raw statistics:', stats);
+    
+    const result = {
+      total_present: stats.present || stats.total_present || 0,
+      total_late: stats.late || stats.total_late || 0,
+      total_absent: stats.absent || stats.total_absent || 0,
       attendance_rate: stats.attendance_rate || 0
     };
+    
+    console.log('[AttendanceHistory] Computed statsData:', result);
+    return result;
   }, [reportData]);
 
   const handleDateChange = (field, value) => {

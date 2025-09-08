@@ -47,9 +47,9 @@ const StudentDashboard = () => {
   return (
     <div className="space-y-6">
       {/* Welcome Section with Quick Actions */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex justify-between items-start">
-          <div>
+      <div className="bg-white shadow rounded-lg p-4 md:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Welcome back, {user?.first_name || 'Student'}!
             </h2>
@@ -65,13 +65,15 @@ const StudentDashboard = () => {
               </div>
             )}
           </div>
-          <button
-            onClick={() => navigate('/student/attendance/clock')}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
-          >
-            <ClockIcon className="w-5 h-5" />
-            Clock In/Out
-          </button>
+          <div className="sm:pt-1">
+            <button
+              onClick={() => navigate('/student/attendance/clock')}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700 sm:w-auto"
+            >
+              <ClockIcon className="h-5 w-5" />
+              Clock In/Out
+            </button>
+          </div>
         </div>
       </div>
 
