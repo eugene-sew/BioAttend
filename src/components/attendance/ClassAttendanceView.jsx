@@ -43,6 +43,16 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
     },
   });
 
+  // Define manual clock-in handler before it's referenced anywhere
+  const handleManualClockIn = useCallback(
+    (studentId, studentName) => {
+      if (window.confirm(`Clock in ${studentName} manually?`)) {
+        manualClockInMutation.mutate({ studentId });
+      }
+    },
+    [manualClockInMutation]
+  );
+
   // Real-time updates via Pusher
   const handleAttendanceUpdate = useCallback(
     (data) => {
@@ -192,11 +202,7 @@ const ClassAttendanceView = ({ scheduleId, scheduleTitle, date }) => {
     );
   };
 
-  const handleManualClockIn = useCallback((studentId, studentName) => {
-    if (window.confirm(`Clock in ${studentName} manually?`)) {
-      manualClockInMutation.mutate({ studentId });
-    }
-  }, [manualClockInMutation]);
+  
 
   if (isLoading) {
     return (
