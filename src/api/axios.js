@@ -59,6 +59,7 @@ export const facialApi = {
   enrollStudent: (studentId, formData, configOverrides = {}) =>
     axiosInstance.post(`/api/students/${studentId}/enroll/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000, // 1 minute
       ...configOverrides,
     }),
 
@@ -68,6 +69,7 @@ export const facialApi = {
   enrollSelf: (formData, configOverrides = {}) =>
     axiosInstance.post(`/api/students/me/enroll/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000, // 1 minute
       ...configOverrides,
     }),
 
@@ -98,23 +100,24 @@ export const facialApi = {
   },
 
   enrollSmart: async (studentId, formData, configOverrides = {}) => {
+    // Set 1 minute timeout for enrollment calls
+    const enrollConfig = {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000, // 1 minute
+      ...configOverrides,
+    };
+    
     try {
       return await axiosInstance.post(
         `/api/students/${studentId}/enroll/`,
         formData,
-        {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          ...configOverrides,
-        }
+        enrollConfig
       );
     } catch (err) {
       const status = err?.response?.status;
       if (status === 403 || status === 401) {
         // Fall back to self-enroll endpoint
-        return await axiosInstance.post(`/api/students/me/enroll/`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          ...configOverrides,
-        });
+        return await axiosInstance.post(`/api/students/me/enroll/`, formData, enrollConfig);
       }
       throw err;
     }

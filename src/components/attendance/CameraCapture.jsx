@@ -7,7 +7,7 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import * as faceapi from 'face-api.js';
+// import * as faceapi from 'face-api.js';
 import toast from 'react-hot-toast';
 
 const CameraCapture = forwardRef(
@@ -26,22 +26,9 @@ const CameraCapture = forwardRef(
     const [capturedImage, setCapturedImage] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for back
-    const [modelsReady, setModelsReady] = useState(false);
-    const [faceState, setFaceState] = useState({ detected: false, ok: false });
-
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const streamRef = useRef(null);
-    const overlayRef = useRef(null);
-    const rafRef = useRef(null);
-    const stableCountRef = useRef(0);
-
-    const loadModels = useCallback(async () => {
-      if (modelsReady) return;
-      // expects models under public/models
-      await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri('/models')]);
-      setModelsReady(true);
-    }, [modelsReady]);
 
     // Start camera stream
     const startCamera = useCallback(async () => {
@@ -66,125 +53,17 @@ const CameraCapture = forwardRef(
       } catch (error) {
         console.error('Error accessing camera:', error);
         toast.error('Failed to access camera. Please check permissions.');
-        return; // don't proceed if camera failed
-      }
-
-      // Load models separately to give clearer errors
-      try {
-        await loadModels();
-      } catch (e) {
-        console.error('Error loading face models:', e);
-        toast.error(
-          'Failed to load face model files. Ensure files exist in /public/models'
-        );
         return;
       }
-
-      // Start detection loop after video metadata is ready
-      const video = videoRef.current;
-      if (video) {
-        const onLoaded = () => {
-          const o = overlayRef.current;
-          if (o) {
-            o.width = video.videoWidth;
-            o.height = video.videoHeight;
-          }
-          detectLoop();
-        };
-        if (video.readyState >= 2) onLoaded();
-        else video.addEventListener('loadeddata', onLoaded, { once: true });
-      }
-    }, [facingMode, loadModels]);
-
-    const clearOverlay = useCallback(() => {
-      const o = overlayRef.current;
-      if (!o) return;
-      const ctx = o.getContext('2d');
-      ctx.clearRect(0, 0, o.width, o.height);
-    }, []);
-
-    const detectLoop = useCallback(async () => {
-      cancelAnimationFrame(rafRef.current);
-      const video = videoRef.current;
-      const o = overlayRef.current;
-      if (!video || !o || !modelsReady) return;
-
-      const opts = new faceapi.TinyFaceDetectorOptions({
-        inputSize: 224,
-        scoreThreshold: 0.5,
-      });
-      const ctx = o.getContext('2d');
-
-      const step = async () => {
-        try {
-          clearOverlay();
-          let ok = false;
-          let detected = false;
-          if (video.readyState >= 2) {
-            const det = await faceapi.detectSingleFace(video, opts);
-            if (det) {
-              detected = true;
-              const box = det.box;
-              // Draw box
-              ctx.strokeStyle = '#22c55e';
-              ctx.lineWidth = 2;
-              ctx.strokeRect(box.x, box.y, box.width, box.height);
-
-              // Quality checks: size and centeredness
-              const minSize =
-                Math.min(video.videoWidth, video.videoHeight) * 0.35; // at least 35% of min dimension
-              const centerX = video.videoWidth / 2;
-              const centerY = video.videoHeight / 2;
-              const boxCenterX = box.x + box.width / 2;
-              const boxCenterY = box.y + box.height / 2;
-              const centerTolX = video.videoWidth * 0.12; // within 12% of center
-              const centerTolY = video.videoHeight * 0.12;
-              ok =
-                box.width >= minSize &&
-                box.height >= minSize &&
-                Math.abs(boxCenterX - centerX) <= centerTolX &&
-                Math.abs(boxCenterY - centerY) <= centerTolY;
-
-              // guide text
-              ctx.fillStyle = 'rgba(0,0,0,0.5)';
-              ctx.font = '16px sans-serif';
-              ctx.fillStyle = ok ? '#22c55e' : '#f97316';
-              ctx.fillText(
-                ok ? 'Good alignment' : 'Center face and move closer',
-                12,
-                24
-              );
-
-              // stability logic
-              if (ok) stableCountRef.current += 1;
-              else stableCountRef.current = 0;
-              if (ok && stableCountRef.current >= 8 && hideConfirmOnCapture) {
-                // auto capture once stable
-                capturePhoto();
-                stableCountRef.current = 0;
-              }
-            } else {
-              stableCountRef.current = 0;
-            }
-          }
-          setFaceState({ detected, ok });
-        } catch (e) {
-          // ignore transient errors
-        }
-        rafRef.current = requestAnimationFrame(step);
-      };
-      rafRef.current = requestAnimationFrame(step);
-    }, [modelsReady, clearOverlay, hideConfirmOnCapture]);
+    }, [facingMode]);
 
     // Stop camera stream
     const stopCamera = useCallback(() => {
-      cancelAnimationFrame(rafRef.current);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
         setIsStreaming(false);
       }
-      clearOverlay();
     }, []);
 
     // Capture photo from video stream
@@ -198,8 +77,11 @@ const CameraCapture = forwardRef(
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
-        // Draw video frame to canvas
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Mirror the image horizontally for selfie mode
+        context.save();
+        context.scale(-1, 1);
+        context.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+        context.restore();
 
         // Convert to base64 JPEG
         const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
@@ -305,15 +187,13 @@ const CameraCapture = forwardRef(
                 playsInline
                 muted
                 className="h-full w-full object-cover"
+                style={{ transform: 'scaleX(-1)' }}
               />
-              {/* Detection overlay */}
-              <canvas
-                ref={overlayRef}
-                className="absolute inset-0 h-full w-full"
-              />
-              {isStreaming && showControls && (
-                <div className="absolute right-4 top-4">
+              {/* Camera controls overlay */}
+              {showControls && (
+                <div className="absolute bottom-4 right-4">
                   <button
+                    type="button"
                     onClick={switchCamera}
                     className="rounded-full bg-white bg-opacity-80 p-2 transition-opacity hover:bg-opacity-100"
                     title="Switch Camera"
@@ -350,15 +230,7 @@ const CameraCapture = forwardRef(
         {/* Instructions */}
         {!capturedImage && showControls && (
           <div className="mt-3 text-sm text-gray-600">
-            <p>
-              {modelsReady
-                ? faceState.ok
-                  ? 'Hold steady… we will capture automatically.'
-                  : faceState.detected
-                    ? 'Center your face and move closer until the box turns green.'
-                    : 'Looking for your face… ensure good lighting.'
-                : 'Loading face model…'}
-            </p>
+            <p>Position your face in the center of the frame and capture when ready.</p>
           </div>
         )}
 
@@ -369,7 +241,7 @@ const CameraCapture = forwardRef(
               <button
                 type="button"
                 onClick={capturePhoto}
-                disabled={!isStreaming || !modelsReady || !faceState.ok}
+                disabled={!isStreaming}
                 className="inline-flex justify-center rounded-md bg-black px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <svg
@@ -391,11 +263,7 @@ const CameraCapture = forwardRef(
                     d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                {modelsReady
-                  ? faceState.ok
-                    ? 'Capture'
-                    : 'Align Face'
-                  : 'Loading…'}
+                Capture
               </button>
             ) : (
               !hideConfirmOnCapture && (

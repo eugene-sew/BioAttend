@@ -96,5 +96,9 @@
       ]
     }
   ],
+  "permissions": [
+    "camera"
+  ],
+  "prefer_related_applications": false,
   "screenshots": []
 }
