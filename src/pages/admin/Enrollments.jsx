@@ -10,34 +10,33 @@ import {
   XCircleIcon,
   ClockIcon
 } from '@heroicons/react/24/outline';
-import axios from 'axios';
-import { facialApi } from '../../api/axios';
+import { facialApi, userApi } from '../../api/axios';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import BiometricEnrollmentModal from '../../components/attendance/BiometricEnrollmentModal';
-import useAuthStore from '../../store/authStore';
 
 const Enrollments = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const queryClient = useQueryClient();
-  const { accessToken } = useAuthStore();
 
-  // Fetch all students using direct API call
+  // Fetch all students using userApi
   const studentsQuery = useQuery({
     queryKey: ['students'],
     queryFn: async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/auth/users/', {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          }
-        });
+        const response = await userApi.getUsers();
         
-        console.log('Full API response:', response.data);
+        console.log('Full API response:', response);
+        console.log('Response data keys:', Object.keys(response.data || {}));
+        console.log('Response data:', response.data);
         
-        const data = response.data;
+        // userApi.getUsers() returns the transformed data directly, not wrapped in .data
+        const data = response.data || response;
         const students = data.results || data;
+        
+        console.log('Students array:', students);
+        console.log('Students is array:', Array.isArray(students));
         
         if (!Array.isArray(students)) {
           throw new Error('Invalid data format received');
@@ -49,7 +48,7 @@ const Enrollments = () => {
         throw error;
       }
     },
-    enabled: !!accessToken
+    enabled: true
   });
 
   // Fetch enrollment statistics
