@@ -7,7 +7,7 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-// import * as faceapi from 'face-api.js';
+import * as faceapi from 'face-api.js';
 import toast from 'react-hot-toast';
 
 const CameraCapture = forwardRef(
@@ -26,13 +26,139 @@ const CameraCapture = forwardRef(
     const [capturedImage, setCapturedImage] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for back
+    const [modelsLoaded, setModelsLoaded] = useState(false);
+    const [faceDetected, setFaceDetected] = useState(false);
+    const [capturedFaces, setCapturedFaces] = useState([]);
+    const [detectionStatus, setDetectionStatus] = useState('Loading models...');
+    
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
+    const overlayCanvasRef = useRef(null);
     const streamRef = useRef(null);
+    const detectionIntervalRef = useRef(null);
+
+    // Load face-api.js models
+    const loadModels = useCallback(async () => {
+      try {
+        setDetectionStatus('Loading face detection models...');
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+          faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+          faceapi.nets.faceExpressionNet.loadFromUri('/models'),
+        ]);
+        setModelsLoaded(true);
+        setDetectionStatus('Models loaded successfully');
+      } catch (error) {
+        console.error('Error loading face-api models:', error);
+        setDetectionStatus('Failed to load face detection models');
+        toast.error('Failed to load face detection models. Some features may not work.');
+      }
+    }, []);
+
+    // Start face detection loop
+    const startFaceDetection = useCallback(() => {
+      if (!modelsLoaded || !videoRef.current || !overlayCanvasRef.current) return;
+
+      const video = videoRef.current;
+      const canvas = overlayCanvasRef.current;
+      
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const ctx = canvas.getContext('2d');
+      let consecutiveDetections = 0;
+      let lastDetectionTime = 0;
+      
+      detectionIntervalRef.current = setInterval(async () => {
+        try {
+          if (video.readyState >= 2) {
+            // Use more sensitive detection options for better accuracy with darker skin tones
+            const detectionOptions = new faceapi.TinyFaceDetectorOptions({
+              inputSize: 416, // Higher input size for better accuracy
+              scoreThreshold: 0.3 // Lower threshold for more sensitive detection
+            });
+
+            const detections = await faceapi
+              .detectSingleFace(video, detectionOptions)
+              .withFaceLandmarks()
+              .withFaceExpressions();
+
+            // Clear previous drawings
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const currentTime = Date.now();
+
+            if (detections) {
+              consecutiveDetections++;
+              lastDetectionTime = currentTime;
+              
+              // Only update state after 2 consecutive detections to reduce flickering
+              if (consecutiveDetections >= 2) {
+                setFaceDetected(true);
+                setDetectionStatus(`Face detected! Captured ${capturedFaces.length} out of 5`);
+              }
+              
+              // Draw detection box and landmarks with better visibility
+              ctx.strokeStyle = '#00ff00'; // Bright green
+              ctx.lineWidth = 3;
+              faceapi.draw.drawDetections(canvas, detections);
+              
+              // Draw landmarks with better visibility
+              ctx.fillStyle = '#00ff00';
+              faceapi.draw.drawFaceLandmarks(canvas, detections);
+              
+              // Auto-capture faces for enrollment (up to 5) - wait 10 seconds between captures
+              if (capturedFaces.length < 5 && hideConfirmOnCapture && consecutiveDetections >= 20) { // 20 * 500ms = 10 seconds
+                setCapturedFaces(prev => {
+                  const newFaces = [...prev, detections];
+                  if (newFaces.length >= 5) {
+                    setDetectionStatus('5 faces captured! Processing...');
+                    // Trigger capture after collecting 5 faces
+                    setTimeout(() => capturePhoto(), 500);
+                  } else {
+                    setDetectionStatus(`Face captured ${newFaces.length}/5! Next capture in 10 seconds...`);
+                    // Reset consecutive detections to wait another 10 seconds
+                    consecutiveDetections = 0;
+                  }
+                  return newFaces;
+                });
+              }
+            } else {
+              // Only reset face detected state if we haven't detected a face for 2 seconds
+              if (currentTime - lastDetectionTime > 2000) {
+                consecutiveDetections = 0;
+                setFaceDetected(false);
+                setDetectionStatus(`Adjusting lighting... Captured ${capturedFaces.length} out of 5`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Face detection error:', error);
+          setDetectionStatus('Face detection error - try adjusting lighting');
+        }
+      }, 500); // Run detection twice per second for smoother experience
+    }, [modelsLoaded, capturedFaces.length, hideConfirmOnCapture]);
+
+    // Stop face detection
+    const stopFaceDetection = useCallback(() => {
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+        detectionIntervalRef.current = null;
+      }
+      
+      // Clear overlay canvas
+      if (overlayCanvasRef.current) {
+        const ctx = overlayCanvasRef.current.getContext('2d');
+        ctx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height);
+      }
+      
+      setFaceDetected(false);
+      setCapturedFaces([]);
+    }, []);
 
     // Start camera stream
     const startCamera = useCallback(async () => {
-      // Start camera stream
       try {
         const constraints = {
           video: {
@@ -49,22 +175,30 @@ const CameraCapture = forwardRef(
           videoRef.current.srcObject = stream;
           streamRef.current = stream;
           setIsStreaming(true);
+          
+          // Start face detection when video is ready
+          videoRef.current.addEventListener('loadeddata', () => {
+            if (modelsLoaded) {
+              startFaceDetection();
+            }
+          });
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
         toast.error('Failed to access camera. Please check permissions.');
         return;
       }
-    }, [facingMode]);
+    }, [facingMode, modelsLoaded, startFaceDetection]);
 
     // Stop camera stream
     const stopCamera = useCallback(() => {
+      stopFaceDetection();
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
         setIsStreaming(false);
       }
-    }, []);
+    }, [stopFaceDetection]);
 
     // Capture photo from video stream
     const capturePhoto = useCallback(() => {
@@ -122,6 +256,21 @@ const CameraCapture = forwardRef(
       stopCamera();
       setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
     }, [stopCamera]);
+
+    // Load models on component mount
+    useEffect(() => {
+      loadModels();
+    }, [loadModels]);
+
+    // Start face detection when models are loaded and camera is streaming
+    useEffect(() => {
+      if (modelsLoaded && isStreaming && videoRef.current) {
+        startFaceDetection();
+      }
+      return () => {
+        stopFaceDetection();
+      };
+    }, [modelsLoaded, isStreaming, startFaceDetection, stopFaceDetection]);
 
     // Confirm and send captured image
     const confirmCapture = useCallback(async () => {
@@ -189,6 +338,12 @@ const CameraCapture = forwardRef(
                 className="h-full w-full object-cover"
                 style={{ transform: 'scaleX(-1)' }}
               />
+              {/* Face detection overlay canvas */}
+              <canvas
+                ref={overlayCanvasRef}
+                className="absolute inset-0 h-full w-full pointer-events-none"
+                style={{ transform: 'scaleX(-1)' }}
+              />
               {/* Camera controls overlay */}
               {showControls && (
                 <div className="absolute bottom-4 right-4">
@@ -214,6 +369,18 @@ const CameraCapture = forwardRef(
                   </button>
                 </div>
               )}
+              {/* Face detection status */}
+              {modelsLoaded && (
+                <div className="absolute top-4 left-4 right-4">
+                  <div className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                    faceDetected 
+                      ? 'bg-green-500 bg-opacity-90 text-white' 
+                      : 'bg-yellow-500 bg-opacity-90 text-white'
+                  }`}>
+                    {detectionStatus}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <img
@@ -230,7 +397,20 @@ const CameraCapture = forwardRef(
         {/* Instructions */}
         {!capturedImage && showControls && (
           <div className="mt-3 text-sm text-gray-600">
-            <p>Position your face in the center of the frame and capture when ready.</p>
+            {modelsLoaded ? (
+              <div>
+                <p>
+                  {faceDetected 
+                    ? 'Great! Your face is detected. Click capture when ready.' 
+                    : 'Position your face in the center of the frame. Try adjusting lighting if needed.'}
+                </p>
+                <p className="mt-2 text-xs text-gray-500">
+                  💡 Tips: Face the camera directly, ensure good lighting, avoid shadows on your face
+                </p>
+              </div>
+            ) : (
+              <p>Loading face detection models...</p>
+            )}
           </div>
         )}
 
@@ -241,7 +421,7 @@ const CameraCapture = forwardRef(
               <button
                 type="button"
                 onClick={capturePhoto}
-                disabled={!isStreaming}
+                disabled={!isStreaming || (!faceDetected && modelsLoaded)}
                 className="inline-flex justify-center rounded-md bg-black px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <svg
@@ -263,7 +443,9 @@ const CameraCapture = forwardRef(
                     d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                Capture
+                {modelsLoaded 
+                  ? (faceDetected ? 'Capture' : 'Waiting for face...') 
+                  : 'Loading...'}
               </button>
             ) : (
               !hideConfirmOnCapture && (
