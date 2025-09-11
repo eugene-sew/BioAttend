@@ -28,7 +28,7 @@ const CameraCapture = forwardRef(
     const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for back
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [faceDetected, setFaceDetected] = useState(false);
-    const [capturedFaces, setCapturedFaces] = useState([]);
+    const [capturedCount, setCapturedCount] = useState(0);
     const [detectionStatus, setDetectionStatus] = useState('Loading models...');
     
     const videoRef = useRef(null);
@@ -62,17 +62,18 @@ const CameraCapture = forwardRef(
       const video = videoRef.current;
       const canvas = overlayCanvasRef.current;
       
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
       const ctx = canvas.getContext('2d');
       let consecutiveDetections = 0;
       let lastDetectionTime = 0;
       
       detectionIntervalRef.current = setInterval(async () => {
         try {
-          if (video.readyState >= 2) {
+          if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+            // Update canvas dimensions to match video on each frame
+            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+            }
             // Use more sensitive detection options for better accuracy with darker skin tones
             const detectionOptions = new faceapi.TinyFaceDetectorOptions({
               inputSize: 416, // Higher input size for better accuracy
@@ -96,40 +97,32 @@ const CameraCapture = forwardRef(
               // Only update state after 2 consecutive detections to reduce flickering
               if (consecutiveDetections >= 2) {
                 setFaceDetected(true);
-                setDetectionStatus(`Face detected! Captured ${capturedFaces.length} out of 5`);
+                setDetectionStatus('Face detected!');
               }
               
               // Draw detection box and landmarks with better visibility
+              const displaySize = { width: canvas.width, height: canvas.height };
+              faceapi.matchDimensions(canvas, displaySize);
+              
+              // Resize detections to match canvas
+              const resizedDetections = faceapi.resizeResults(detections, displaySize);
+              
+              // Draw detection box
               ctx.strokeStyle = '#00ff00'; // Bright green
               ctx.lineWidth = 3;
-              faceapi.draw.drawDetections(canvas, detections);
+              faceapi.draw.drawDetections(canvas, resizedDetections);
               
               // Draw landmarks with better visibility
               ctx.fillStyle = '#00ff00';
-              faceapi.draw.drawFaceLandmarks(canvas, detections);
+              faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
               
-              // Auto-capture faces for enrollment (up to 5) - wait 10 seconds between captures
-              if (capturedFaces.length < 5 && hideConfirmOnCapture && consecutiveDetections >= 20) { // 20 * 500ms = 10 seconds
-                setCapturedFaces(prev => {
-                  const newFaces = [...prev, detections];
-                  if (newFaces.length >= 5) {
-                    setDetectionStatus('5 faces captured! Processing...');
-                    // Trigger capture after collecting 5 faces
-                    setTimeout(() => capturePhoto(), 500);
-                  } else {
-                    setDetectionStatus(`Face captured ${newFaces.length}/5! Next capture in 10 seconds...`);
-                    // Reset consecutive detections to wait another 10 seconds
-                    consecutiveDetections = 0;
-                  }
-                  return newFaces;
-                });
-              }
+              // Keep face detection for visual feedback only - no auto-capture
             } else {
               // Only reset face detected state if we haven't detected a face for 2 seconds
               if (currentTime - lastDetectionTime > 2000) {
                 consecutiveDetections = 0;
                 setFaceDetected(false);
-                setDetectionStatus(`Adjusting lighting... Captured ${capturedFaces.length} out of 5`);
+                setDetectionStatus('Adjusting lighting...');
               }
             }
           }
@@ -138,7 +131,7 @@ const CameraCapture = forwardRef(
           setDetectionStatus('Face detection error - try adjusting lighting');
         }
       }, 500); // Run detection twice per second for smoother experience
-    }, [modelsLoaded, capturedFaces.length, hideConfirmOnCapture]);
+    }, [modelsLoaded]);
 
     // Stop face detection
     const stopFaceDetection = useCallback(() => {
@@ -154,7 +147,7 @@ const CameraCapture = forwardRef(
       }
       
       setFaceDetected(false);
-      setCapturedFaces([]);
+      setCapturedCount(0);
     }, []);
 
     // Start camera stream
@@ -202,34 +195,53 @@ const CameraCapture = forwardRef(
 
     // Capture photo from video stream
     const capturePhoto = useCallback(() => {
-      if (videoRef.current && canvasRef.current) {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
+      if (!videoRef.current || !canvasRef.current) return;
 
-        // Set canvas dimensions to match video
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
 
-        // Mirror the image horizontally for selfie mode
-        context.save();
-        context.scale(-1, 1);
-        context.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-        context.restore();
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-        // Convert to base64 JPEG
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setCapturedImage(imageDataUrl);
+      // Draw the video frame to canvas (mirrored)
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+      ctx.scale(-1, 1); // Reset scale
 
-        // If hideConfirmOnCapture is true, immediately send the image
-        if (hideConfirmOnCapture && onCapture) {
-          onCapture(imageDataUrl);
-          // Reset for next capture
-          setCapturedImage(null);
-          return;
-        }
+      // Convert to data URL
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      setCapturedImage(dataUrl);
 
-        // Stop camera after capture for review
+      // For enrollment mode, increment capture count and auto-process
+      if (hideConfirmOnCapture) {
+        setCapturedCount(prev => {
+          const newCount = prev + 1;
+          if (newCount >= 5) {
+            setDetectionStatus('5 images captured! Processing...');
+            // Only stop camera when all 5 images are captured
+            stopCamera();
+          } else {
+            setDetectionStatus('Image captured! Click capture for next image.');
+          }
+          return newCount;
+        });
+        
+        // Auto-process the image in enrollment mode
+        setTimeout(() => {
+          if (onCapture) {
+            onCapture(dataUrl).then(() => {
+              setCapturedImage(null); // Clear for next capture
+            }).catch(error => {
+              console.error('Error processing image:', error);
+              toast.error('Failed to process image');
+              setCapturedImage(null);
+            });
+          }
+        }, 100); // Small delay to ensure state updates
+      } else {
+        // For single capture mode (attendance), stop camera for review
         stopCamera();
       }
     }, [stopCamera, hideConfirmOnCapture, onCapture]);
@@ -272,6 +284,13 @@ const CameraCapture = forwardRef(
       };
     }, [modelsLoaded, isStreaming, startFaceDetection, stopFaceDetection]);
 
+    // Handle modal close
+    const handleClose = useCallback(() => {
+      stopCamera();
+      setCapturedImage(null);
+      if (onClose) onClose();
+    }, [stopCamera, onClose]);
+
     // Confirm and send captured image
     const confirmCapture = useCallback(async () => {
       if (capturedImage && onCapture) {
@@ -282,9 +301,9 @@ const CameraCapture = forwardRef(
           if (!hideConfirmOnCapture) {
             handleClose();
           } else {
-            // Reset for next capture
+            // For enrollment mode, just clear the captured image
+            // Camera should already be running for next capture
             setCapturedImage(null);
-            startCamera();
           }
         } catch (error) {
           console.error('Error processing image:', error);
@@ -293,24 +312,17 @@ const CameraCapture = forwardRef(
           setIsLoading(false);
         }
       }
-    }, [capturedImage, onCapture, hideConfirmOnCapture, startCamera]);
-
-    // Handle modal close
-    const handleClose = useCallback(() => {
-      stopCamera();
-      setCapturedImage(null);
-      if (onClose) onClose();
-    }, [stopCamera, onClose]);
+    }, [capturedImage, onCapture, hideConfirmOnCapture, handleClose]);
 
     // Start camera when modal opens
     useEffect(() => {
-      if (isOpen && !capturedImage) {
+      if (isOpen && (!capturedImage || hideConfirmOnCapture)) {
         startCamera();
       }
       return () => {
         stopCamera();
       };
-    }, [isOpen]);
+    }, [isOpen, capturedImage, hideConfirmOnCapture, startCamera, stopCamera]);
 
     // Update camera when facing mode changes
     useEffect(() => {
@@ -421,7 +433,7 @@ const CameraCapture = forwardRef(
               <button
                 type="button"
                 onClick={capturePhoto}
-                disabled={!isStreaming || (!faceDetected && modelsLoaded)}
+                disabled={!isStreaming}
                 className="inline-flex justify-center rounded-md bg-black px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <svg
@@ -443,9 +455,9 @@ const CameraCapture = forwardRef(
                     d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                {modelsLoaded 
-                  ? (faceDetected ? 'Capture' : 'Waiting for face...') 
-                  : 'Loading...'}
+                {hideConfirmOnCapture && capturedCount < 5
+                  ? `Capture ${capturedCount + 1}/5`
+                  : 'Capture'}
               </button>
             ) : (
               !hideConfirmOnCapture && (
