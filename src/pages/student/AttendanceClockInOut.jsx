@@ -345,16 +345,16 @@ const AttendanceClockInOut = () => {
     if (!status || status.status === 'not_marked') {
       // Can clock in
       return (
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <button
             onClick={() => openCameraForAttendance(schedule, 'in')}
-            className="rounded-md bg-green-600 px-4 py-2 text-white transition-colors hover:bg-green-700 text-sm font-medium"
+            className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
           >
             Clock In
           </button>
           <button
             onClick={() => handleManualRequest(schedule)}
-            className="rounded-md bg-blue-600 px-3 py-2 text-white transition-colors hover:bg-blue-700 flex items-center justify-center"
+            className="flex items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-white transition-colors hover:bg-blue-700"
             title="Request manual check from lecturer"
           >
             <HandRaisedIcon className="h-4 w-4" />
@@ -406,12 +406,12 @@ const AttendanceClockInOut = () => {
   const hasError = meError || schedulesError || statusError;
 
   return (
-    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
+    <div className="space-y-4 p-4 md:space-y-6 md:p-0">
       {/* Header */}
-      <div className="rounded-lg bg-white p-4 md:p-6 shadow">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+      <div className="rounded-lg bg-white p-4 shadow md:p-6">
+        <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div>
-            <h2 className="text-xl md:text-2xl font-bold text-gray-900">
+            <h2 className="text-xl font-bold text-gray-900 md:text-2xl">
               Attendance Clock-In/Out
             </h2>
             <p className="mt-1 text-sm text-gray-600">
@@ -500,9 +500,9 @@ const AttendanceClockInOut = () => {
                       key={schedule.id}
                       className="rounded-lg border p-4 transition-colors hover:bg-gray-50"
                     >
-                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
+                      <div className="flex flex-col space-y-3 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
                         <div className="flex-1">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 space-y-2 sm:space-y-0">
+                          <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:gap-3 sm:space-y-0">
                             <h4 className="text-lg font-semibold text-gray-900">
                               {schedule.title}
                             </h4>
@@ -514,10 +514,8 @@ const AttendanceClockInOut = () => {
                               </span>
                             )}
                           </div>
-                          <p className="mt-1 text-sm text-gray-600">
-                            {schedule.course_code}
-                          </p>
-                          <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                             <div className="flex items-center text-sm text-gray-500">
                               <svg
                                 className="mr-1 h-4 w-4 flex-shrink-0"
@@ -562,7 +560,7 @@ const AttendanceClockInOut = () => {
                           </div>
                           {status?.check_in_time && (
                             <div className="mt-2 text-xs text-gray-500">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                                 <span>
                                   Clocked in at:{' '}
                                   {new Date(
@@ -581,7 +579,9 @@ const AttendanceClockInOut = () => {
                             </div>
                           )}
                         </div>
-                        <div className="flex justify-end lg:ml-4">{getActionButton(schedule)}</div>
+                        <div className="flex justify-end lg:ml-4">
+                          {getActionButton(schedule)}
+                        </div>
                       </div>
                     </div>
                   );
