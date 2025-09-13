@@ -28,7 +28,7 @@
     "date-fns": "^4.1.0",
     "face-api.js": "^0.22.2",
     "jspdf": "^3.0.1",
-    "jspdf-autotable": "^5.0.2",
+    "jspdf-autotable": "^3.8.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.542.0",
     "pusher-js": "^8.4.0",

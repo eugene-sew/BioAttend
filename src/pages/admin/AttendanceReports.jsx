@@ -93,10 +93,9 @@ const AttendanceReports = () => {
     enabled: !!user && (user.role === 'STUDENT' || !!selectedGroup),
   });
 
-  // Fetch student records (for student role). We enable this for all modes so
-  // we can use it as a fallback to compute metrics if the stats object lacks counts.
+  // Fetch detailed records for admin/faculty or student records for students
   const { data: recordsData, isLoading: recordsLoading } = useQuery({
-    queryKey: ['attendance-records', dateRange, user?.role],
+    queryKey: ['attendance-records', dateRange, selectedGroup, user?.role],
     queryFn: async () => {
       const params = {
         from: dateRange.startDate,
@@ -105,10 +104,19 @@ const AttendanceReports = () => {
 
       if (user?.role === 'STUDENT') {
         return await attendanceApi.getStudentRecords(params);
+      } else if (user?.role === 'ADMIN' || user?.role === 'FACULTY') {
+        // Get detailed records with student names for reports
+        if (!selectedGroup) return null;
+        const code = groupsData?.find(
+          (g) => g.id.toString() === selectedGroup
+        )?.code;
+        if (!code) return null;
+        params.group = code;
+        return await attendanceApi.getDetailedRecords(params);
       }
       return null;
     },
-    enabled: !!user && user.role === 'STUDENT',
+    enabled: !!user && (user.role === 'STUDENT' || (!!selectedGroup && !!groupsData)),
   });
 
   const handleDateChange = (field, value) => {
@@ -231,6 +239,13 @@ const AttendanceReports = () => {
   const exportToPDF = () => {
     try {
       const doc = new jsPDF();
+      
+      // Check if autoTable is available on the doc instance (v3.8.2 style)
+      if (typeof doc.autoTable !== 'function') {
+        console.error('autoTable plugin not available on doc instance');
+        toast.error('PDF export functionality unavailable');
+        return;
+      }
 
       // Header
       doc.setFontSize(20);
@@ -331,6 +346,7 @@ const AttendanceReports = () => {
         }
       } else if (
         reportType === 'detailed' &&
+        !recordsData?.data &&
         statsData?.data &&
         user?.role !== 'STUDENT'
       ) {
@@ -342,8 +358,7 @@ const AttendanceReports = () => {
         ) {
           const tableData = report.most_absent_students.map((s) => [
             s.student__student_id,
-            s.student__user__first_name,
-            s.student__user__last_name,
+            `${s.student__user__first_name} ${s.student__user__last_name}`,
             s.student__user__email,
             String(s.absence_count),
           ]);
@@ -351,8 +366,7 @@ const AttendanceReports = () => {
             head: [
               [
                 'Student ID',
-                'First Name',
-                'Last Name',
+                'Student Name',
                 'Email',
                 'Absence Count',
               ],
@@ -379,6 +393,10 @@ const AttendanceReports = () => {
             startY,
           });
         }
+      } else if (reportType === 'detailed' && !recordsData?.data) {
+        // No detailed records available
+        doc.text('No detailed attendance records available for the selected period.', 20, 60);
+        doc.text('Please try selecting a different date range or ensure there are attendance records.', 20, 75);
       }
 
       doc.save(
@@ -386,7 +404,8 @@ const AttendanceReports = () => {
       );
       toast.success('PDF exported successfully');
     } catch (error) {
-      toast.error('Failed to export PDF');
+      console.error('PDF export error:', error);
+      toast.error('Failed to export PDF: ' + (error.message || 'Unknown error'));
     }
   };
 

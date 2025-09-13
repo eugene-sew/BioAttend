@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import {
   useState,
   useRef,
@@ -9,6 +8,10 @@ import {
 } from 'react';
 import * as faceapi from 'face-api.js';
 import toast from 'react-hot-toast';
+
+// Global face-api.js models loading state
+let modelsLoadingPromise = null;
+let areModelsLoaded = false;
 
 const CameraCapture = forwardRef(
   (
@@ -37,21 +40,44 @@ const CameraCapture = forwardRef(
     const streamRef = useRef(null);
     const detectionIntervalRef = useRef(null);
 
-    // Load face-api.js models
+    // Load face-api.js models (singleton pattern for global caching)
     const loadModels = useCallback(async () => {
       try {
+        // If models are already loaded globally, just update local state
+        if (areModelsLoaded) {
+          setModelsLoaded(true);
+          setDetectionStatus('Models ready');
+          return;
+        }
+
+        // If models are currently being loaded, wait for that promise
+        if (modelsLoadingPromise) {
+          setDetectionStatus('Loading face detection models...');
+          await modelsLoadingPromise;
+          setModelsLoaded(true);
+          setDetectionStatus('Models ready');
+          return;
+        }
+
+        // Start loading models and cache the promise globally
         setDetectionStatus('Loading face detection models...');
-        await Promise.all([
+        modelsLoadingPromise = Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
           faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
           faceapi.nets.faceExpressionNet.loadFromUri('/models'),
         ]);
+
+        await modelsLoadingPromise;
+        areModelsLoaded = true;
         setModelsLoaded(true);
-        setDetectionStatus('Models loaded successfully');
+        setDetectionStatus('Models ready');
       } catch (error) {
         console.error('Error loading face-api models:', error);
         setDetectionStatus('Failed to load face detection models');
         toast.error('Failed to load face detection models. Some features may not work.');
+        // Reset global state on error
+        modelsLoadingPromise = null;
+        areModelsLoaded = false;
       }
     }, []);
 

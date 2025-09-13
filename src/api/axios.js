@@ -350,6 +350,14 @@ export const attendanceApi = {
     axiosInstance.get('/api/reports/attendance/', { params }),
 
   /**
+   * Get detailed attendance records with student names
+   * @param {Object} params - Query parameters (group, from, to)
+   * @returns {Promise} Response with detailed attendance records
+   */
+  getDetailedRecords: (params) =>
+    axiosInstance.get('/api/reports/attendance/records/', { params }),
+
+  /**
    * Get single attendance record
    * @param {string} id - Record ID
    * @returns {Promise} Response with attendance record
@@ -409,37 +417,38 @@ export const attendanceApi = {
   },
 
   /**
-   * Process manual attendance (faculty)
-   * @param {Object} data - Manual attendance data
-   * @returns {Promise} Response
-   */
-  manualAttendance: (data) =>
-    axiosInstance.post('/api/attendance/manual/', data),
 
-  /**
-   * Get attendance statistics
-   * @param {Object} params - Query parameters
-   * @returns {Promise} Response with statistics
-   */
-  getStatistics: (params) =>
-    axiosInstance.get('/api/reports/charts/', { params }),
+/**
+ * Get attendance statistics
+ * @param {Object} params - Query parameters
+ * @returns {Promise} Response with statistics
+ */
+getStatistics: (params) =>
+  axiosInstance.get('/api/reports/charts/', { params }),
 
-  /**
-   * Get attendance report
-   * @param {Object} params - Report parameters
-   * @returns {Promise} Response with report data
-   */
-  getReport: (params) =>
-    axiosInstance.get('/api/reports/attendance/', { params }),
+/**
+ * Get attendance report
+ * @param {Object} params - Report parameters
+ * @returns {Promise} Response with report data
+ */
+getReport: (params) =>
+  axiosInstance.get('/api/reports/attendance/', { params }),
 
-  /**
-   * Get individual student's attendance report
-   * @param {string} studentId - The student's ID (students.student_id)
-   * @param {Object} params - Optional query params: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
-   * @returns {Promise} Response with student's attendance report
-   */
-  getStudentReport: (studentId, params) =>
-    axiosInstance.get(`/api/reports/student/${studentId}/`, { params }),
+/**
+ * Get dashboard statistics
+ * @returns {Promise} Response with dashboard stats
+ */
+getDashboardStats: () =>
+  axiosInstance.get('/api/reports/dashboard/stats/'),
+
+/**
+ * Get individual student's attendance report
+ * @param {string} studentId - The student's ID (students.student_id)
+ * @param {Object} params - Optional query params: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
+ * @returns {Promise} Response with student's attendance report
+ */
+getStudentReport: (studentId, params) =>
+  axiosInstance.get(`/api/reports/student/${studentId}/`, { params }),
 
   /**
    * Export attendance data
@@ -759,7 +768,7 @@ export const studentApi = {
    * @param {Object} data - Update data
    */
   updateProfile: (studentId, data) =>
-    axiosInstance.patch(`/api/students/${studentId}/`, data),
+    axiosInstance.patch(`/api/students/${studentId}/profile/`, data),
 
   /**
    * Get student profile

@@ -76,10 +76,17 @@ export default function GroupManagement() {
   const deleteMutation = useMutation({
     mutationFn: (id) => groupsApi.delete(id),
     onSuccess: () => {
-      toast.success('Group deleted');
+      toast.success('Course deleted successfully');
       qc.invalidateQueries({ queryKey: ['groups'] });
     },
-    onError: () => toast.error('Failed to delete group'),
+    onError: (error) => {
+      const message = error?.response?.data?.detail || error?.response?.data?.message || 'Failed to delete course';
+      if (message.includes('PROTECT') || message.includes('students')) {
+        toast.error('Cannot delete course: Students are still enrolled. Please transfer students to another course first.');
+      } else {
+        toast.error(message);
+      }
+    },
   });
 
   const editing = !!form.id;
@@ -278,7 +285,7 @@ export default function GroupManagement() {
                     <button
                       className="rounded-md border border-red-300 px-3 py-1 text-sm text-red-600"
                       onClick={() => {
-                        if (confirm('Delete this group?'))
+                        if (confirm('Delete this course? Note: You cannot delete a course that has enrolled students. Please transfer students to another course first.'))
                           deleteMutation.mutate(g.id);
                       }}
                     >

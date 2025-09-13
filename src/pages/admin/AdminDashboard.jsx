@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { activityApi, healthApi, userApi, attendanceApi, scheduleApi } from '../../api/axios';
 import { Link } from 'react-router-dom';
+import useAuthStore from '../../store/authStore';
 
 const AdminDashboard = () => {
+  const { accessToken, user } = useAuthStore();
   const [recentActivities, setRecentActivities] = useState([]);
   const [systemHealth, setSystemHealth] = useState({
     api_server: { status: 'loading', message: 'Checking...', details: {} },
@@ -12,32 +14,28 @@ const AdminDashboard = () => {
   });
 
   console.log('AdminDashboard component rendered');
+  console.log('Auth state - Token exists:', !!accessToken, 'User:', user);
   console.log('System health state:', systemHealth);
 
-  // Fetch total users
-  const { data: usersData } = useQuery({
-    queryKey: ['dashboard-users'],
-    queryFn: () => {
-      console.log('Calling userApi.getUsers');
-      return userApi.getUsers({ page_size: 1 });
+  // Fetch comprehensive dashboard statistics
+  const { data: dashboardStats, isLoading: statsLoading, error: statsError } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: async () => {
+      console.log('Calling attendanceApi.getDashboardStats');
+      try {
+        const response = await attendanceApi.getDashboardStats();
+        console.log('Dashboard stats response:', response);
+        return response;
+      } catch (error) {
+        console.error('Dashboard stats error:', error);
+        throw error;
+      }
+    },
+    enabled: !!accessToken, // Only run query if user is authenticated
+    refetchInterval: 60000, // Refetch every minute
+    onError: (error) => {
+      console.error('Dashboard stats query error:', error);
     }
-  });
-
-  // Fetch today's attendance statistics
-  const today = new Date().toISOString().split('T')[0];
-  const { data: attendanceStats } = useQuery({
-    queryKey: ['dashboard-attendance', today],
-    // Backend expects 'from' and 'to' for date range
-    queryFn: () => attendanceApi.getStatistics({
-      from: today,
-      to: today
-    })
-  });
-
-  // Fetch active schedules count
-  const { data: schedulesData } = useQuery({
-    queryKey: ['dashboard-schedules'],
-    queryFn: () => scheduleApi.getSchedules({ page_size: 1 })
   });
 
   // Fetch recent activities from the new activity tracking API
@@ -101,10 +99,27 @@ const AdminDashboard = () => {
     }
   }, [recentActivitiesData]);
 
-  const totalUsers = usersData?.count || 0;
-  const todayAttendance = attendanceStats?.average_attendance_rate || 0;
-  const totalSchedules = schedulesData?.count || 0;
-  const presentToday = attendanceStats?.total_present || 0;
+  // Extract metrics from dashboard stats
+  // The API response structure is: { data: { success: true, data: { users: {...}, courses: {...}, attendance: {...} } } }
+  const stats = dashboardStats?.data?.data;
+  console.log('Full dashboard response:', dashboardStats);
+  console.log('Dashboard stats data:', stats);
+  console.log('Stats loading:', statsLoading);
+  console.log('Stats error:', statsError);
+  
+  // If dashboard stats API fails, show "Loading..." or error state
+  const totalUsers = statsError ? 'Auth Error' : (statsLoading ? 'Loading...' : (stats?.users?.total_users || 0));
+  const totalStudents = statsError ? 'Auth Error' : (statsLoading ? 'Loading...' : (stats?.users?.total_students || 0));
+  const todayAttendance = statsError ? 'Auth Error' : (statsLoading ? 'Loading...' : (stats?.attendance?.today?.attendance_rate || 0));
+  const todaysSchedules = statsError ? 'Auth Error' : (statsLoading ? 'Loading...' : (stats?.courses?.todays_schedules || 0));
+  const presentToday = statsError ? 'Auth Error' : (statsLoading ? 'Loading...' : (stats?.attendance?.today?.present || 0));
+  const totalCourses = statsError ? 'Auth Error' : (statsLoading ? 'Loading...' : (stats?.courses?.total_courses || 0));
+  const recentEnrollments = statsError ? 'Auth Error' : (statsLoading ? 'Loading...' : (stats?.users?.recent_enrollments || 0));
+
+  // Show authentication status for debugging
+  if (statsError) {
+    console.error('Dashboard stats error details:', statsError);
+  }
 
   return (
     <div className="space-y-6">
@@ -152,10 +167,10 @@ const AdminDashboard = () => {
             <div className="ml-5">
               <dl>
                 <dt className="text-sm font-medium text-gray-500 truncate">
-                  Active Schedules
+                  Today's Classes
                 </dt>
                 <dd className="text-2xl font-semibold text-gray-900">
-                  {totalSchedules}
+                  {todaysSchedules}
                 </dd>
               </dl>
             </div>
@@ -176,7 +191,7 @@ const AdminDashboard = () => {
                   Today's Attendance
                 </dt>
                 <dd className="text-2xl font-semibold text-gray-900">
-                  {todayAttendance}%
+                  {typeof todayAttendance === 'number' ? `${todayAttendance}%` : todayAttendance}
                 </dd>
               </dl>
             </div>
