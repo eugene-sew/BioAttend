@@ -446,17 +446,55 @@ getDashboardStats: () =>
  * @param {string} studentId - The student's ID (students.student_id)
  * @param {Object} params - Optional query params: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
  * @returns {Promise} Response with student's attendance report
- */
-getStudentReport: (studentId, params) =>
-  axiosInstance.get(`/api/reports/student/${studentId}/`, { params }),
+  /**
+   * Get attendance report
+   * @param {Object} params - Report parameters
+   * @returns {Promise} Response with report data
+   */
+  getReport: (params) =>
+    axiosInstance.get('/api/reports/attendance/', { params }),
 
   /**
-   * Get manual attendance requests (Faculty)
+   * Get dashboard statistics
+   * @returns {Promise} Response with dashboard stats
+   */
+  getDashboardStats: () =>
+    axiosInstance.get('/api/reports/dashboard/stats/'),
+
+  /**
+   * Get individual student's attendance report
+   * @param {string} studentId - The student's ID (students.student_id)
+   * @param {Object} params - Optional query params: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
+   * @returns {Promise} Response with student's attendance report
+   */
+  getStudentReport: (studentId, params) =>
+    axiosInstance.get(`/api/reports/student/${studentId}/`, { params }),
+
+  /**
+   * Get manual attendance requests
    * @param {Object} params - Query parameters (status filter)
    * @returns {Promise} Response with manual requests
    */
   getManualRequests: (params) =>
-    axiosInstance.get('/api/attendance/manual-requests/', { params }),
+    axiosInstance.get('/api/attendance/manual-requests/', { params }).then((r) => r.data),
+
+  /**
+   * Approve manual attendance request
+   * @param {number} requestId - Request ID to approve
+   * @param {Object} data - Approval data (reason)
+   * @returns {Promise} Response with approval result
+   */
+  approveManualRequest: (requestId, data) =>
+    axiosInstance.post(`/api/attendance/manual-requests/${requestId}/approve/`, data).then((r) => r.data),
+
+  /**
+   * Reject manual attendance request
+   * @param {number} requestId - Request ID to reject
+   * @param {Object} data - Rejection data (reason)
+   * @returns {Promise} Response with rejection result
+   */
+  rejectManualRequest: (requestId, data) =>
+    axiosInstance.post(`/api/attendance/manual-requests/${requestId}/reject/`, data).then((r) => r.data),
 
   /**
    * Export attendance data

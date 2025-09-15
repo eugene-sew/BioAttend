@@ -142,6 +142,7 @@ const AppRoutes = () => {
           <Route path="attendance" element={<FacultyAttendance />} />
           <Route path="attendance/:scheduleId" element={<DetailedAttendance />} />
           <Route path="reports" element={<FacultyAttendanceReports />} />
+          <Route path="manual-requests" element={<ManualRequests />} />
           <Route path="students" element={<FacultyStudents />} />
           <Route path="my-groups" element={<FacultyMyGroups />} />
           <Route path="schedules" element={<FacultySchedules />} />

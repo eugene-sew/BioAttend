@@ -24,7 +24,7 @@ const ManualRequests = () => {
     queryKey: ['manual-requests', filter],
     queryFn: async () => {
       const response = await attendanceApi.getManualRequests({ status: filter });
-      return response.data;
+      return response || { requests: [], stats: {} };
     }
   });
 
