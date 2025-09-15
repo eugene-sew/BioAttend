@@ -25,29 +25,59 @@ const Enrollments = () => {
   const [selectedGroup, setSelectedGroup] = useState('');
   const queryClient = useQueryClient();
 
-  // Fetch all students using userApi
+  // Fetch all students using userApi with pagination handling
   const studentsQuery = useQuery({
     queryKey: ['students'],
     queryFn: async () => {
       try {
-        const response = await userApi.getUsers();
+        let allUsers = [];
+        let page = 1;
+        let hasMorePages = true;
         
-        console.log('Full API response:', response);
-        console.log('Response data keys:', Object.keys(response.data || {}));
-        console.log('Response data:', response.data);
-        
-        // userApi.getUsers() returns the transformed data directly, not wrapped in .data
-        const data = response.data || response;
-        const students = data.results || data;
-        
-        console.log('Students array:', students);
-        console.log('Students is array:', Array.isArray(students));
-        
-        if (!Array.isArray(students)) {
-          throw new Error('Invalid data format received');
+        // Fetch all pages
+        while (hasMorePages) {
+          console.log(`Fetching page ${page}...`);
+          const response = await userApi.getUsers({ page, page_size: 100 });
+          
+          console.log(`Page ${page} response:`, response);
+          
+          const data = response.data || response;
+          const users = data.results || data;
+          const totalCount = data.count || 0;
+          const hasNext = data.next;
+          
+          console.log(`Page ${page} - Users: ${users?.length}, Total: ${totalCount}, HasNext: ${!!hasNext}`);
+          
+          if (Array.isArray(users)) {
+            allUsers = [...allUsers, ...users];
+            
+            // Check if we have more pages
+            // If there's a next field or if we haven't reached the total count
+            if (hasNext || (totalCount > allUsers.length)) {
+              page++;
+            } else {
+              hasMorePages = false;
+            }
+          } else {
+            hasMorePages = false;
+          }
         }
         
-        return students.filter(user => user.role === 'STUDENT');
+        console.log('All users fetched:', allUsers.length);
+        console.log('User roles breakdown:', allUsers.reduce((acc, user) => {
+          acc[user.role] = (acc[user.role] || 0) + 1;
+          return acc;
+        }, {}));
+        
+        // Filter for students only
+        const students = allUsers.filter(user => user.role === 'STUDENT');
+        console.log('Students filtered:', students.length);
+        
+        if (students.length === 0) {
+          console.warn('No students found in the system. Available roles:', [...new Set(allUsers.map(u => u.role))]);
+        }
+        
+        return students;
       } catch (error) {
         console.error('Error fetching students:', error);
         throw error;
@@ -63,6 +93,47 @@ const Enrollments = () => {
       const { data } = await facialApi.getEnrollmentStats();
       return data;
     }
+  });
+
+  // Fetch individual enrollment data for each student
+  const enrollmentQueries = useQuery({
+    queryKey: ['student-enrollments', studentsQuery.data?.map(s => s.student_profile?.student_id)],
+    queryFn: async () => {
+      if (!studentsQuery.data) return {};
+      
+      const enrollmentPromises = studentsQuery.data.map(async (student) => {
+        if (!student.student_profile?.student_id) return null;
+        
+        try {
+          const response = await facialApi.getEnrollment(student.student_profile.student_id);
+          return {
+            student_id: student.student_profile.student_id,
+            enrollment: response.data
+          };
+        } catch (error) {
+          // If 404, student is not enrolled
+          if (error.response?.status === 404) {
+            return {
+              student_id: student.student_profile.student_id,
+              enrollment: null
+            };
+          }
+          throw error;
+        }
+      });
+      
+      const results = await Promise.all(enrollmentPromises);
+      const enrollmentMap = {};
+      
+      results.forEach(result => {
+        if (result) {
+          enrollmentMap[result.student_id] = result.enrollment;
+        }
+      });
+      
+      return enrollmentMap;
+    },
+    enabled: !!studentsQuery.data && studentsQuery.data.length > 0
   });
 
   // Fetch groups for CSV upload
@@ -160,12 +231,21 @@ const Enrollments = () => {
   };
 
   const getEnrollmentStatus = (student) => {
-    // Check if student is in recent enrollments from stats
-    const recentEnrollments = statsQuery.data?.recent_enrollments || [];
-    const isEnrolled = recentEnrollments.some(
-      enrollment => enrollment.student_id === student.student_profile?.student_id
-    );
-    return isEnrolled ? 'enrolled' : 'not_enrolled';
+    if (!student.student_profile?.student_id || !enrollmentQueries.data) {
+      return 'not_enrolled';
+    }
+    
+    const enrollmentResponse = enrollmentQueries.data[student.student_profile.student_id];
+    return enrollmentResponse?.enrolled ? 'enrolled' : 'not_enrolled';
+  };
+
+  const getEnrollmentDetails = (student) => {
+    if (!student.student_profile?.student_id || !enrollmentQueries.data) {
+      return null;
+    }
+    
+    const enrollmentResponse = enrollmentQueries.data[student.student_profile.student_id];
+    return enrollmentResponse?.enrollment || null;
   };
 
   const StatusBadge = ({ status }) => {
@@ -259,7 +339,7 @@ const Enrollments = () => {
                     Total Students
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {statsQuery.data?.total_students || filteredStudents.length}
+                    {statsQuery.data?.statistics?.total_students || filteredStudents.length}
                   </dd>
                 </dl>
               </div>
@@ -279,7 +359,7 @@ const Enrollments = () => {
                     Enrolled
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {statsQuery.data?.enrolled_students || 0}
+                    {statsQuery.data?.statistics?.total_enrollments || 0}
                   </dd>
                 </dl>
               </div>
@@ -301,7 +381,7 @@ const Enrollments = () => {
                     Enrollment Rate
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {Math.round((statsQuery.data?.enrollment_rate || 0) * 100)}%
+                    {statsQuery.data?.statistics?.enrollment_rate || 0}%
                   </dd>
                 </dl>
               </div>
@@ -320,10 +400,10 @@ const Enrollments = () => {
               <div className="ml-5 w-0 flex-1">
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">
-                    Avg Quality
+                    Success Rate
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {(statsQuery.data?.average_quality || 0).toFixed(2)}
+                    {statsQuery.data?.statistics?.success_rate || 0}%
                   </dd>
                 </dl>
               </div>
@@ -380,6 +460,12 @@ const Enrollments = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Enrollment Status
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Confidence
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Enrolled Date
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -388,6 +474,7 @@ const Enrollments = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredStudents.map((student) => {
                 const enrollmentStatus = getEnrollmentStatus(student);
+                const enrollmentDetails = getEnrollmentDetails(student);
                 
                 return (
                   <tr key={student.id} className="hover:bg-gray-50">
@@ -427,6 +514,22 @@ const Enrollments = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <StatusBadge status={enrollmentStatus} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {enrollmentDetails?.enrollment?.face_confidence 
+                        ? `${(enrollmentDetails.enrollment.face_confidence * 100).toFixed(1)}%`
+                        : '-'
+                      }
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {enrollmentDetails?.enrollment?.enrollment_date 
+                        ? new Date(enrollmentDetails.enrollment.enrollment_date).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })
+                        : '-'
+                      }
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">

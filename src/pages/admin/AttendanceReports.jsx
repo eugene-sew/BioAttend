@@ -92,30 +92,23 @@ const AttendanceReports = () => {
     enabled: !!user && (user.role === 'STUDENT' || !!selectedGroup),
   });
 
-  // Fetch detailed records for admin/faculty or student records for students
+  // Fetch comprehensive attendance data with all details
   const { data: recordsData, isLoading: recordsLoading } = useQuery({
-    queryKey: ['attendance-records', dateRange, selectedGroup, user?.role],
+    queryKey: ['attendance-detailed-records', dateRange, selectedGroup],
     queryFn: async () => {
       const params = {
         from: dateRange.startDate,
         to: dateRange.endDate,
       };
-
-      if (user?.role === 'STUDENT') {
-        return await attendanceApi.getStudentRecords(params);
-      } else if (user?.role === 'ADMIN' || user?.role === 'FACULTY') {
-        // Get detailed records with student names for reports
-        if (!selectedGroup) return null;
-        const code = groupsData?.find(
-          (g) => g.id.toString() === selectedGroup
-        )?.code;
+      if (selectedGroup) {
+        const selectedGroupData = groupsData?.find(g => g.id.toString() === selectedGroup);
+        const code = selectedGroupData?.code;
         if (!code) return null;
         params.group = code;
-        return await attendanceApi.getDetailedRecords(params);
       }
-      return null;
+      return await attendanceApi.getDetailedRecords(params);
     },
-    enabled: !!user && (user.role === 'STUDENT' || (!!selectedGroup && !!groupsData)),
+    enabled: !!dateRange.startDate && !!dateRange.endDate && (user?.role === 'ADMIN' || !!selectedGroup),
   });
 
   const handleDateChange = (field, value) => {
@@ -173,77 +166,29 @@ const AttendanceReports = () => {
   const exportToCSV = () => {
     try {
       let csvContent = '';
-      let data = [];
 
-      if (reportType === 'summary' && statsData?.data) {
-        if (user?.role === 'STUDENT') {
-          const stats = statsData.data;
-          csvContent = 'Metric,Value\n';
-          csvContent += `Attendance Rate,${stats.attendance_rate || 0}%\n`;
-          csvContent += `Present,${stats.total_present || 0}\n`;
-          csvContent += `Late,${stats.total_late || 0}\n`;
-          csvContent += `Absent,${stats.total_absent || 0}\n`;
-          csvContent += `Total Classes,${stats.total_classes || 0}\n`;
-        } else {
-          const report = statsData.data;
-          csvContent =
-            'Date,Present Count,Absent Count,Late Count,Excused Count,Total Students,Attendance Percentage,Average Attendance Rate\n';
-          (report.daily_attendance || []).forEach((day) => {
-            csvContent += `${day.date},${day.present_count || 0},${day.absent_count || 0},${day.late_count || 0},${day.excused_count || 0},${day.total_students || 0},${Math.round(day.attendance_percentage || 0)}%,${Math.round(report.overall_statistics?.average_attendance_rate || 0)}%\n`;
-          });
-          
-          // Add overall statistics section
-          csvContent += '\nOverall Statistics\n';
-          csvContent += 'Metric,Value\n';
-          const overall = report.overall_statistics || {};
-          csvContent += `Total Classes,${overall.total_classes || 0}\n`;
-          csvContent += `Total Attendance Records,${overall.total_attendance_records || 0}\n`;
-          csvContent += `Average Attendance Rate,${overall.average_attendance_rate || 0}%\n`;
-        }
-      } else if (reportType === 'detailed' && recordsData?.data) {
-        csvContent = 'Student ID,Student Name,Email,Course,Date,Time,Status,Method,Is Late,Manual Override\n';
+      if (recordsData?.data) {
+        // Comprehensive detailed CSV with all available fields
+        csvContent = 'Student ID,Student Name,Email,Course,Schedule,Date,Clock In Time,Clock Out Time,Status,Method,Is Late,Manual Override,Face Recognition Confidence,Location,Duration (minutes),Attendance Rate,Notes\n';
         recordsData.data.forEach((record) => {
-          csvContent += `${record.student_id || 'N/A'},"${record.student_name || 'N/A'}","${record.student_email || 'N/A'}","${record.course_title || 'N/A'}",${record.date || 'N/A'},${record.time || 'N/A'},${record.status || 'N/A'},${record.method || 'N/A'},${record.is_late ? 'Yes' : 'No'},${record.is_manual_override ? 'Yes' : 'No'}\n`;
+          const clockInTime = record.clock_in_time || record.time || 'N/A';
+          const clockOutTime = record.clock_out_time || 'N/A';
+          const duration = record.duration_minutes || 'N/A';
+          const confidence = record.face_recognition_confidence ? `${record.face_recognition_confidence}%` : 'N/A';
+          const location = record.location || 'N/A';
+          const notes = record.notes || '';
+          
+          csvContent += `${record.student_id || 'N/A'},"${record.student_name || 'N/A'}","${record.student_email || 'N/A'}","${record.course_title || 'N/A'}","${record.schedule_title || 'N/A'}",${record.date || 'N/A'},${clockInTime},${clockOutTime},${record.status || 'N/A'},${record.method || 'N/A'},${record.is_late ? 'Yes' : 'No'},${record.is_manual_override ? 'Yes' : 'No'},${confidence},${location},${duration},"${record.attendance_rate || 'N/A'}","${notes}"\n`;
         });
-      } else if (
-        reportType === 'detailed' &&
-        statsData?.data &&
-        user?.role !== 'STUDENT'
-      ) {
-        // For Admin/Faculty, export comprehensive student data
-        const report = statsData.data;
-        csvContent = 'Most Absent Students - Full Details\n';
-        csvContent += 'Student ID,First Name,Last Name,Full Name,Email,Phone,Status,Group,Faculty,Absence Count,Total Classes,Attendance Rate\n';
-        (report.most_absent_students || []).forEach((s) => {
-          const fullName = `${s.student__user__first_name || ''} ${s.student__user__last_name || ''}`.trim();
-          const attendanceRate = s.total_classes > 0 ? Math.round(((s.total_classes - s.absence_count) / s.total_classes) * 100) : 0;
-          csvContent += `${s.student__student_id || 'N/A'},"${s.student__user__first_name || 'N/A'}","${s.student__user__last_name || 'N/A'}","${fullName}","${s.student__user__email || 'N/A'}","${s.student__user__phone || 'N/A'}","${s.student__status || 'N/A'}","${s.student__group__name || 'N/A'}","${s.student__group__faculty || 'N/A'}",${s.absence_count || 0},${s.total_classes || 0},${attendanceRate}%\n`;
+      } else if (statsData?.data && user?.role !== 'STUDENT') {
+        // Fallback: use stats data when detailed records not available
+        const daily = statsData.data.daily || [];
+        csvContent = 'Date,Total Students,Present,Absent,Late,Attendance Rate (%),Present Students,Absent Students\n';
+        daily.forEach((day) => {
+          const presentStudents = day.present_students ? day.present_students.join('; ') : '';
+          const absentStudents = day.absent_students ? day.absent_students.join('; ') : '';
+          csvContent += `${day.date},${day.total_students || 0},${day.present || 0},${day.absent || 0},${day.late || 0},${day.attendance_rate || 0},"${presentStudents}","${absentStudents}"\n`;
         });
-        
-        csvContent += '\nPunctuality Distribution - Detailed\n';
-        csvContent += 'Status,Count,Percentage,Description\n';
-        const totalPunctuality = (report.punctuality_distribution || []).reduce((sum, p) => sum + (p.count || 0), 0);
-        (report.punctuality_distribution || []).forEach((p) => {
-          const percentage = totalPunctuality > 0 ? Math.round((p.count / totalPunctuality) * 100) : 0;
-          const description = p.status === 'PRESENT' ? 'On Time' : 
-                           p.status === 'LATE' ? 'Arrived Late' :
-                           p.status === 'ABSENT' ? 'Did Not Attend' :
-                           p.status === 'EXCUSED' ? 'Excused Absence' : 'Unknown';
-          csvContent += `${p.status},${p.count},${percentage}%,"${description}"\n`;
-        });
-        
-        // Add overall statistics if available
-        if (report.overall_statistics) {
-          csvContent += '\nOverall Statistics\n';
-          csvContent += 'Metric,Value\n';
-          const overall = report.overall_statistics;
-          csvContent += `Total Classes,${overall.total_classes || 0}\n`;
-          csvContent += `Total Students,${overall.total_students || 0}\n`;
-          csvContent += `Total Attendance Records,${overall.total_attendance_records || 0}\n`;
-          csvContent += `Average Attendance Rate,${overall.average_attendance_rate || 0}%\n`;
-          csvContent += `Most Punctual Class,${overall.best_attendance_date || 'N/A'}\n`;
-          csvContent += `Least Punctual Class,${overall.worst_attendance_date || 'N/A'}\n`;
-        }
       }
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -574,23 +519,6 @@ const AttendanceReports = () => {
               </div>
             )}
 
-            {/* Report Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Report Type
-              </label>
-              <div className="relative mt-1">
-                <select
-                  value={reportType}
-                  onChange={(e) => setReportType(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="summary">Summary</option>
-                  <option value="detailed">Detailed Records</option>
-                </select>
-                <ChartBarIcon className="pointer-events-none absolute right-8 top-2 h-5 w-5 text-gray-400" />
-              </div>
-            </div>
           </div>
         </div>
       </div>

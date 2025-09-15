@@ -44,12 +44,12 @@ export const facialApi = {
    * @param {string|number} studentId
    */
   getEnrollment: (studentId) =>
-    axiosInstance.get(`/api/students/${studentId}/enrollment/`),
+    axiosInstance.get(`/api/facial_recognition/students/${studentId}/enrollment/`),
 
   /**
    * Get enrollment for current authenticated student (self)
    */
-  getSelfEnrollment: () => axiosInstance.get(`/api/students/me/enrollment/`),
+  getSelfEnrollment: () => axiosInstance.get(`/api/facial_recognition/self/status/`),
 
   /**
    * Enroll a student's facial data via video file or ZIP of images
@@ -57,7 +57,7 @@ export const facialApi = {
    * @param {FormData} formData - must contain key 'media' (file)
    */
   enrollStudent: (studentId, formData, configOverrides = {}) =>
-    axiosInstance.post(`/api/students/${studentId}/enroll/`, formData, {
+    axiosInstance.post(`/api/facial_recognition/students/${studentId}/enroll/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000, // 1 minute
       ...configOverrides,
@@ -67,7 +67,7 @@ export const facialApi = {
    * Enroll current authenticated student (self)
    */
   enrollSelf: (formData, configOverrides = {}) =>
-    axiosInstance.post(`/api/students/me/enroll/`, formData, {
+    axiosInstance.post(`/api/facial_recognition/self/enroll/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000, // 1 minute
       ...configOverrides,
@@ -77,23 +77,23 @@ export const facialApi = {
    * Delete enrollment for a student
    */
   deleteEnrollment: (studentId) =>
-    axiosInstance.delete(`/api/students/${studentId}/enrollment/`),
+    axiosInstance.delete(`/api/facial_recognition/students/${studentId}/enrollment/`),
 
   /**
    * Get enrollment statistics
    */
-  getEnrollmentStats: () => axiosInstance.get(`/api/enrollment-statistics/`),
+  getEnrollmentStats: () => axiosInstance.get(`/api/facial_recognition/enrollment-statistics/`),
 
   /**
    * Smart helpers: try explicit student endpoint first; if permission denied, fall back to self endpoint.
    */
   getEnrollmentSmart: async (studentId) => {
     try {
-      return await axiosInstance.get(`/api/students/${studentId}/enrollment/`);
+      return await axiosInstance.get(`/api/facial_recognition/students/${studentId}/enrollment/`);
     } catch (err) {
       const status = err?.response?.status;
       if (status === 403 || status === 401) {
-        return await axiosInstance.get(`/api/students/me/enrollment/`);
+        return await axiosInstance.get(`/api/facial_recognition/self/status/`);
       }
       throw err;
     }
@@ -109,7 +109,7 @@ export const facialApi = {
     
     try {
       return await axiosInstance.post(
-        `/api/students/${studentId}/enroll/`,
+        `/api/facial_recognition/students/${studentId}/enroll/`,
         formData,
         enrollConfig
       );
@@ -117,7 +117,7 @@ export const facialApi = {
       const status = err?.response?.status;
       if (status === 403 || status === 401) {
         // Fall back to self-enroll endpoint
-        return await axiosInstance.post(`/api/students/me/enroll/`, formData, enrollConfig);
+        return await axiosInstance.post(`/api/facial_recognition/self/enroll/`, formData, enrollConfig);
       }
       throw err;
     }
@@ -449,6 +449,14 @@ getDashboardStats: () =>
  */
 getStudentReport: (studentId, params) =>
   axiosInstance.get(`/api/reports/student/${studentId}/`, { params }),
+
+  /**
+   * Get manual attendance requests (Faculty)
+   * @param {Object} params - Query parameters (status filter)
+   * @returns {Promise} Response with manual requests
+   */
+  getManualRequests: (params) =>
+    axiosInstance.get('/api/attendance/manual-requests/', { params }),
 
   /**
    * Export attendance data
