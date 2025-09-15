@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import {
@@ -13,6 +13,7 @@ import {
 import { attendanceApi } from '../../api/axios';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import useAuthStore from '../../store/authStore';
+import usePusher from '../../hooks/usePusher';
 
 const ManualRequests = () => {
   const { user } = useAuthStore();
@@ -27,6 +28,27 @@ const ManualRequests = () => {
       return response || { requests: [], stats: {} };
     }
   });
+
+  // Real-time notification handler
+  const handlePusherNotification = useCallback((data) => {
+    console.log('Manual request notification received:', data);
+    
+    // Show toast notification
+    if (data.type === 'manual_clock_in_request') {
+      toast.success(`New manual request from ${data.student_name}`, {
+        duration: 5000,
+        icon: '🔔'
+      });
+    }
+    
+    // Refresh the requests data
+    queryClient.invalidateQueries(['manual-requests']);
+  }, [queryClient]);
+
+  // Set up Pusher listener for faculty notifications
+  // Listen to faculty-specific channel for manual request notifications
+  const facultyScheduleChannel = user?.faculty_profile ? `faculty-${user.faculty_profile.id}` : null;
+  usePusher(facultyScheduleChannel, 'attendance-notification', handlePusherNotification);
 
   // Approve request mutation
   const approveMutation = useMutation({

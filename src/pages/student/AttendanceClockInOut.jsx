@@ -19,6 +19,17 @@ const getFriendlyError = (error, fallback = 'Something went wrong') => {
       return 'No face enrollment found. Please enroll your face under Profile → Biometrics before clocking in.';
     }
 
+    // Face recognition specific errors
+    if (lowerMsg.includes('face recognized but belongs to a different student')) {
+      return 'Face recognition failed: The detected face belongs to a different student. Please ensure you are using your own account and try again.';
+    }
+    if (lowerMsg.includes('no face detected')) {
+      return 'No face detected in the photo. Please ensure your face is clearly visible and try again.';
+    }
+    if (lowerMsg.includes('face recognition confidence too low')) {
+      return 'Face recognition confidence is too low. Please take a clearer photo with better lighting and try again.';
+    }
+
     // Field errors
     const fieldErrs = data?.errors || data?.error || {};
     if (fieldErrs?.snapshot) {
@@ -29,7 +40,13 @@ const getFriendlyError = (error, fallback = 'Something went wrong') => {
     }
 
     // Status-specific fallbacks
-    if (status === 401) return 'Your session expired. Please log in again.';
+    if (status === 401) {
+      // Check if it's a face recognition 401 vs session 401
+      if (data?.status === 'ABSENT' || lowerMsg.includes('face')) {
+        return serverMsg || 'Face verification failed. Please try again or request manual check.';
+      }
+      return 'Your session expired. Please log in again.';
+    }
     if (status === 403)
       return 'You do not have permission to perform this action.';
     if (status === 404)
@@ -205,17 +222,25 @@ const AttendanceClockInOut = () => {
       const lower = (msg || '').toLowerCase();
       if (
         data?.success === false ||
-        lower.includes('no active facial enrollment')
+        lower.includes('no active facial enrollment') ||
+        data?.status === 'ABSENT'
       ) {
-        toast.error(
-          lower.includes('no active facial enrollment')
-            ? 'No face enrollment found. Please enroll your face under Profile → Biometrics before clocking in.'
-            : msg || 'Clock-in failed'
-        );
+        let errorMsg = msg || 'Clock-in failed';
+        
+        // Specific error messages for different scenarios
+        if (lower.includes('no active facial enrollment')) {
+          errorMsg = 'No face enrollment found. Please enroll your face under Profile → Biometrics before clocking in.';
+        } else if (lower.includes('face recognized but belongs to a different student')) {
+          errorMsg = 'Face recognition failed: The detected face belongs to a different student. Please ensure you are using your own account and try again.';
+        } else if (data?.status === 'ABSENT') {
+          errorMsg = msg || 'Face verification failed. Please try again or request manual check.';
+        }
+        
+        toast.error(errorMsg);
         return;
       }
       toast.success('Clock-in successful');
-      // refetch relevant queries here if necessary
+      refetchStatus(); // Refresh status after successful clock-in
     },
     onError: (error) => {
       toast.error(getFriendlyError(error, 'Clock-in failed'));
@@ -240,17 +265,25 @@ const AttendanceClockInOut = () => {
       const lower = (msg || '').toLowerCase();
       if (
         data?.success === false ||
-        lower.includes('no active facial enrollment')
+        lower.includes('no active facial enrollment') ||
+        data?.status === 'ABSENT'
       ) {
-        toast.error(
-          lower.includes('no active facial enrollment')
-            ? 'No face enrollment found. Please enroll your face under Profile → Biometrics before clocking out.'
-            : msg || 'Clock-out failed'
-        );
+        let errorMsg = msg || 'Clock-out failed';
+        
+        // Specific error messages for different scenarios
+        if (lower.includes('no active facial enrollment')) {
+          errorMsg = 'No face enrollment found. Please enroll your face under Profile → Biometrics before clocking out.';
+        } else if (lower.includes('face recognized but belongs to a different student')) {
+          errorMsg = 'Face recognition failed: The detected face belongs to a different student. Please ensure you are using your own account and try again.';
+        } else if (data?.status === 'ABSENT') {
+          errorMsg = msg || 'Face verification failed. Please try again or request manual check.';
+        }
+        
+        toast.error(errorMsg);
         return;
       }
       toast.success('Clock-out successful');
-      // refetch relevant queries here if necessary
+      refetchStatus(); // Refresh status after successful clock-out
     },
     onError: (error) => {
       toast.error(getFriendlyError(error, 'Clock-out failed'));
