@@ -26,6 +26,7 @@ const AttendanceReports = lazy(
 );
 const GroupManagement = lazy(() => import('../pages/admin/GroupManagement'));
 const Enrollments = lazy(() => import('../pages/admin/Enrollments'));
+const ManualRequests = lazy(() => import('../pages/admin/ManualRequests'));
 
 // Faculty pages
 const FacultyDashboardLayout = lazy(
@@ -122,6 +123,7 @@ const AppRoutes = () => {
           <Route path="attendance" element={<AttendanceReports />} />
           <Route path="courses" element={<GroupManagement />} />
           <Route path="enrollments" element={<Enrollments />} />
+          <Route path="manual-requests" element={<ManualRequests />} />
         </Route>
 
         {/* Faculty Routes */}

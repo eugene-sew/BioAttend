@@ -8,9 +8,11 @@ import {
   TrashIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClockIcon
+  ClockIcon,
+  DocumentArrowUpIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
-import { facialApi, userApi } from '../../api/axios';
+import { facialApi, userApi, groupsApi } from '../../api/axios';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import BiometricEnrollmentModal from '../../components/attendance/BiometricEnrollmentModal';
 
@@ -18,6 +20,9 @@ const Enrollments = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
+  const [csvFile, setCsvFile] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState('');
   const queryClient = useQueryClient();
 
   // Fetch all students using userApi
@@ -60,6 +65,15 @@ const Enrollments = () => {
     }
   });
 
+  // Fetch groups for CSV upload
+  const { data: groupsData } = useQuery({
+    queryKey: ['groups'],
+    queryFn: async () => {
+      const response = await groupsApi.list();
+      return response;
+    }
+  });
+
   // Delete enrollment mutation
   const deleteEnrollmentMutation = useMutation({
     mutationFn: async (studentId) => {
@@ -73,6 +87,50 @@ const Enrollments = () => {
       toast.error(error.response?.data?.message || 'Failed to delete enrollment');
     }
   });
+
+  // CSV upload mutation
+  const csvUploadMutation = useMutation({
+    mutationFn: async ({ file, groupId }) => {
+      const formData = new FormData();
+      formData.append('csv_file', file);
+      formData.append('group_id', groupId);
+      
+      const response = await fetch('/api/students/bulk-enroll/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Upload failed');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(`Successfully enrolled ${data.enrolled_count} students`);
+      setShowCsvUpload(false);
+      setCsvFile(null);
+      setSelectedGroup('');
+      queryClient.invalidateQueries(['students']);
+      queryClient.invalidateQueries(['enrollment-stats']);
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to upload CSV');
+    }
+  });
+
+  const handleCsvUpload = () => {
+    if (!csvFile || !selectedGroup) {
+      toast.error('Please select a CSV file and group');
+      return;
+    }
+    
+    csvUploadMutation.mutate({ file: csvFile, groupId: selectedGroup });
+  };
 
   // Filter students based on search
   const filteredStudents = useMemo(() => {
@@ -175,6 +233,15 @@ const Enrollments = () => {
           <p className="mt-2 text-sm text-gray-700">
             Manage student biometric enrollments for facial recognition attendance
           </p>
+        </div>
+        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+          <button
+            onClick={() => setShowCsvUpload(true)}
+            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            <DocumentArrowUpIcon className="-ml-1 mr-2 h-5 w-5" />
+            Bulk Enroll via CSV
+          </button>
         </div>
       </div>
 
@@ -502,6 +569,118 @@ const Enrollments = () => {
             toast.success('Student enrolled successfully');
           }}
         />
+      )}
+
+      {/* CSV Upload Modal */}
+      {showCsvUpload && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowCsvUpload(false)} />
+            
+            <span className="hidden sm:inline-block sm:h-screen sm:align-middle">&#8203;</span>
+            
+            <div className="relative inline-block transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 sm:align-middle">
+              <div>
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100">
+                  <DocumentArrowUpIcon className="h-6 w-6 text-indigo-600" />
+                </div>
+                <div className="mt-3 text-center sm:mt-5">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900">
+                    Bulk Enroll Students via CSV
+                  </h3>
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500">
+                      Upload a CSV file with student information to enroll multiple students at once.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                {/* Group Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Select Group/Course
+                  </label>
+                  <select
+                    value={selectedGroup}
+                    onChange={(e) => setSelectedGroup(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">Choose a group...</option>
+                    {groupsData?.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name} ({group.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* File Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    CSV File
+                  </label>
+                  <div className="mt-1 flex justify-center rounded-md border-2 border-dashed border-gray-300 px-6 pt-5 pb-6">
+                    <div className="space-y-1 text-center">
+                      <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
+                      <div className="flex text-sm text-gray-600">
+                        <label className="relative cursor-pointer rounded-md bg-white font-medium text-indigo-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2 hover:text-indigo-500">
+                          <span>Upload a file</span>
+                          <input
+                            type="file"
+                            accept=".csv"
+                            onChange={(e) => setCsvFile(e.target.files[0])}
+                            className="sr-only"
+                          />
+                        </label>
+                        <p className="pl-1">or drag and drop</p>
+                      </div>
+                      <p className="text-xs text-gray-500">CSV up to 10MB</p>
+                      {csvFile && (
+                        <p className="text-sm text-green-600">Selected: {csvFile.name}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* CSV Format Info */}
+                <div className="rounded-md bg-blue-50 p-4">
+                  <div className="text-sm text-blue-700">
+                    <p className="font-medium">CSV Format Requirements:</p>
+                    <ul className="mt-1 list-disc list-inside space-y-1">
+                      <li>Headers: first_name, last_name, email, student_id</li>
+                      <li>One student per row</li>
+                      <li>Email addresses must be unique</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={handleCsvUpload}
+                  disabled={!csvFile || !selectedGroup || csvUploadMutation.isLoading}
+                  className="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed sm:col-start-2 sm:text-sm"
+                >
+                  {csvUploadMutation.isLoading ? 'Uploading...' : 'Upload & Enroll'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCsvUpload(false);
+                    setCsvFile(null);
+                    setSelectedGroup('');
+                  }}
+                  className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:col-start-1 sm:mt-0 sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

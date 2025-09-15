@@ -25,7 +25,6 @@ const AttendanceReports = () => {
     endDate: new Date().toISOString().split('T')[0],
   });
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [reportType, setReportType] = useState('summary');
 
   // Fetch groups based on user role
   const { data: groupsData } = useQuery({
@@ -603,7 +602,7 @@ const AttendanceReports = () => {
       )}
 
       {/* Statistics Cards */}
-      {reportType === 'summary' && statsData?.data && (
+      {statsData?.data && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <div className="overflow-hidden rounded-lg bg-white shadow">
             <div className="p-3 md:p-5">
@@ -699,8 +698,7 @@ const AttendanceReports = () => {
         </div>
       )}
 
-      {reportType === 'detailed' &&
-        user?.role !== 'STUDENT' &&
+      {user?.role !== 'STUDENT' &&
         statsData?.data &&
         !statsLoading && (
           <div className="space-y-6">
@@ -721,16 +719,22 @@ const AttendanceReports = () => {
                           Student ID
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                          First Name
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                          Last Name
+                          Full Name
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                           Email
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Phone
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Group
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                           Absence Count
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Attendance Rate
                         </th>
                       </tr>
                     </thead>
@@ -741,16 +745,22 @@ const AttendanceReports = () => {
                             {s.student__student_id}
                           </td>
                           <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                            {s.student__user__first_name}
+                            {`${s.student__user__first_name || ''} ${s.student__user__last_name || ''}`.trim() || 'N/A'}
                           </td>
                           <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                            {s.student__user__last_name}
+                            {s.student__user__email || 'N/A'}
                           </td>
                           <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                            {s.student__user__email}
+                            {s.student__phone || 'N/A'}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {s.student__group__name || 'N/A'}
                           </td>
                           <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
                             {s.absence_count}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {s.attendance_rate ? `${Math.round(s.attendance_rate)}%` : 'N/A'}
                           </td>
                         </tr>
                       ))}
@@ -827,8 +837,8 @@ const AttendanceReports = () => {
         </div>
       )}
 
-      {/* Summary Report */}
-      {reportType === 'summary' && statsData?.data && !statsLoading && (
+      {/* Daily Attendance Summary */}
+      {statsData?.data && !statsLoading && (
         <div className="rounded-lg bg-white shadow">
           <div className="border-b border-gray-200 px-6 py-4">
             <h3 className="text-lg font-medium text-gray-900">
@@ -909,9 +919,126 @@ const AttendanceReports = () => {
         </div>
       )}
 
-      {/* Detailed / Insights */}
-      {reportType === 'detailed' &&
-        user?.role === 'STUDENT' &&
+      {/* Detailed Records for Admin/Faculty */}
+      {user?.role !== 'STUDENT' &&
+        recordsData?.data &&
+        Array.isArray(recordsData.data) &&
+        !recordsLoading && (
+          <div className="rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h3 className="text-lg font-medium text-gray-900">
+                Detailed Attendance Records
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Student ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Student Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Email
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Course
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Time
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Method
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Late
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Manual Override
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {(recordsData.data || []).map((record, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                        {record.student_id || 'N/A'}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                        {record.student_name || 'N/A'}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        {record.student_email || 'N/A'}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        {record.course_title || 'N/A'}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        {record.date}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        {record.time}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                            record.status === 'PRESENT'
+                              ? 'bg-green-100 text-green-800'
+                              : record.status === 'LATE'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                          }`}
+                        >
+                          {record.status}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                        {record.method || 'Manual'}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                          record.is_late ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {record.is_late ? 'Yes' : 'No'}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                          record.is_manual_override ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {record.is_manual_override ? 'Yes' : 'No'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {(!recordsData.data || recordsData.data.length === 0) && (
+                <div className="py-12 text-center">
+                  <ClockIcon className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">
+                    No records found
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    No attendance records found for the selected period.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+      {/* Detailed Records for Students */}
+      {user?.role === 'STUDENT' &&
         recordsData?.data &&
         !recordsLoading && (
           <div className="rounded-lg bg-white shadow">
@@ -925,9 +1052,20 @@ const AttendanceReports = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     {user?.role !== 'STUDENT' && (
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Student
-                      </th>
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Student ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Student Name
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Email
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Course
+                        </th>
+                      </>
                     )}
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Date
@@ -941,15 +1079,36 @@ const AttendanceReports = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Method
                     </th>
+                    {user?.role !== 'STUDENT' && (
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Late
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                          Manual Override
+                        </th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {recordsData.data.map((record, index) => (
                     <tr key={index} className="hover:bg-gray-50">
                       {user?.role !== 'STUDENT' && (
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
-                          {record.student_name || 'N/A'}
-                        </td>
+                        <>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                            {record.student_id || 'N/A'}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                            {record.student_name || 'N/A'}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {record.student_email || 'N/A'}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {record.course_title || 'N/A'}
+                          </td>
+                        </>
                       )}
                       <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
                         {record.date}
@@ -973,6 +1132,24 @@ const AttendanceReports = () => {
                       <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                         {record.method || 'Manual'}
                       </td>
+                      {user?.role !== 'STUDENT' && (
+                        <>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                              record.is_late ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {record.is_late ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                              record.is_manual_override ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {record.is_manual_override ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
